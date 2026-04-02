@@ -1,0 +1,21 @@
+{
+  "name": "enspec-power-vr",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@babylonjs/core": "^7.41.1",
+    "@babylonjs/gui": "^7.41.1",
+    "@babylonjs/loaders": "^7.41.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-basic-ssl": "^2.3.0",
+    "typescript": "^5.7.3",
+    "vite": "^6.2.1"
+  }
+}

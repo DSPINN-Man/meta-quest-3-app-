@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.claude/
+*.local
+
+# Large source models (exceed GitHub 100MB limit)
+public/models/iq.glb
+public/models/iq_separated.obj
+public/models/iq_separated.mtl
