@@ -15,8 +15,9 @@ import {
 import type { ModelInfo } from "../scene/modelLoader";
 
 /**
- * Floating 3D menu — minimal, borderless, Apple-like.
- * Soft frosted-glass pills with quiet typography.
+ * Floating 3D menu fixed beside the model.
+ * It mirrors the Quest controller shortcuts so the booth guide can
+ * teach one interaction language across headset and menu.
  */
 
 interface MenuButton {
@@ -27,16 +28,17 @@ interface MenuButton {
   text: TextBlock;
 }
 
-let menuRoot: Mesh | null = null;
 let buttons: MenuButton[] = [];
 let onButtonCallback: ((id: string) => void) | null = null;
 
-// ── Style constants ─────────────────────────────────────────
 const BG_REST = "rgba(18, 18, 24, 0.55)";
 const BG_HOVER = "rgba(32, 32, 42, 0.7)";
 const BG_ACTIVE = "rgba(48, 48, 58, 0.8)";
 const TEXT_REST = "rgba(255, 255, 255, 0.78)";
 const TEXT_HOVER = "rgba(255, 255, 255, 0.95)";
+
+const BG_RESET = "rgba(0, 90, 140, 0.55)";
+const BG_RESET_HOVER = "rgba(0, 110, 170, 0.7)";
 
 export function onMenuButton(cb: (id: string) => void): void {
   onButtonCallback = cb;
@@ -48,24 +50,26 @@ export function createFloatingMenu(scene: Scene, modelInfo?: ModelInfo): void {
   const modelCenter = modelInfo?.center ?? new Vector3(0, 1.25, 0);
 
   const menuPos = new Vector3(
-    modelCenter.x + modelWidth * 0.8 + 0.4,
-    modelHeight * 0.6,
+    modelCenter.x + modelWidth * 0.5 + 0.8,
+    1.4,
     modelCenter.z
   );
 
   const buttonDefs = [
-    { label: "Reveal Interior", id: "open_doors" },
-    { label: "Restore Shell", id: "close_doors" },
-    { label: "Exploded View", id: "exploded_view" },
-    { label: "Reset", id: "reset" },
+    { label: "A  Closer", id: "move_closer" },
+    { label: "B  Back", id: "move_back" },
+    { label: "X  Interior", id: "toggle_interior" },
+    { label: "Y  Explode", id: "toggle_explode" },
+    { label: "Reset View", id: "reset" },
   ];
 
-  const btnWidth = Math.max(0.4, modelHeight * 0.2);
+  const btnWidth = Math.max(0.45, modelHeight * 0.2);
   const btnHeight = Math.max(0.1, modelHeight * 0.05);
   const gap = btnHeight * 0.25;
 
   for (let i = 0; i < buttonDefs.length; i++) {
     const def = buttonDefs[i];
+    const isReset = def.id === "reset";
     const yOffset = (buttonDefs.length / 2 - i - 0.5) * (btnHeight + gap);
 
     const plane = MeshBuilder.CreatePlane(
@@ -78,6 +82,7 @@ export function createFloatingMenu(scene: Scene, modelInfo?: ModelInfo): void {
     plane.billboardMode = Mesh.BILLBOARDMODE_Y;
     plane.isPickable = true;
     plane.receiveShadows = false;
+    plane.setEnabled(false);
 
     const guiTexture = AdvancedDynamicTexture.CreateForMesh(
       plane,
@@ -86,53 +91,55 @@ export function createFloatingMenu(scene: Scene, modelInfo?: ModelInfo): void {
       false
     );
 
-    // Pill background — no border, soft shadow
     const bg = new Rectangle(`bg_${def.id}`);
     bg.width = 1;
     bg.height = 1;
     bg.cornerRadius = 64;
-    bg.thickness = 0;
-    bg.background = BG_REST;
-    bg.shadowColor = "rgba(0, 0, 0, 0.25)";
-    bg.shadowBlur = 12;
+    bg.thickness = isReset ? 2 : 1;
+    bg.color = isReset
+      ? "rgba(0, 170, 255, 0.5)"
+      : "rgba(100, 110, 130, 0.2)";
+    bg.background = isReset ? BG_RESET : BG_REST;
+    bg.shadowColor = isReset
+      ? "rgba(0, 140, 220, 0.35)"
+      : "rgba(0, 0, 0, 0.25)";
+    bg.shadowBlur = isReset ? 20 : 12;
     bg.shadowOffsetY = 2;
     guiTexture.addControl(bg);
 
-    // Label — light weight, tracked
     const text = new TextBlock(`text_${def.id}`, def.label);
     text.color = TEXT_REST;
-    text.fontSize = 36;
-    text.fontWeight = "500";
+    text.fontSize = 34;
+    text.fontWeight = isReset ? "600" : "500";
     text.fontFamily = "system-ui, -apple-system, 'SF Pro Display', sans-serif";
     text.verticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
     text.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
     bg.addControl(text);
 
-    // Click
+    const restBg = isReset ? BG_RESET : BG_REST;
+    const hoverBg = isReset ? BG_RESET_HOVER : BG_HOVER;
+
     plane.actionManager = new ActionManager(scene);
     plane.actionManager.registerAction(
       new ExecuteCodeAction(ActionManager.OnPickTrigger, () => {
-        if (onButtonCallback) onButtonCallback(def.id);
-        // Subtle press feedback
+        onButtonCallback?.(def.id);
         bg.background = BG_ACTIVE;
         text.color = "rgba(255, 255, 255, 1)";
         setTimeout(() => {
-          bg.background = BG_REST;
+          bg.background = restBg;
           text.color = TEXT_REST;
         }, 180);
       })
     );
-
-    // Hover
     plane.actionManager.registerAction(
       new ExecuteCodeAction(ActionManager.OnPointerOverTrigger, () => {
-        bg.background = BG_HOVER;
+        bg.background = hoverBg;
         text.color = TEXT_HOVER;
       })
     );
     plane.actionManager.registerAction(
       new ExecuteCodeAction(ActionManager.OnPointerOutTrigger, () => {
-        bg.background = BG_REST;
+        bg.background = restBg;
         text.color = TEXT_REST;
       })
     );
@@ -140,7 +147,9 @@ export function createFloatingMenu(scene: Scene, modelInfo?: ModelInfo): void {
     buttons.push({ label: def.label, id: def.id, mesh: plane, bg, text });
   }
 
-  console.log(`Floating menu created: ${buttons.length} buttons`);
+  console.log(
+    `Floating menu created: ${buttons.length} buttons (conference shortcut layout)`
+  );
 }
 
 export function showMenu(): void {
@@ -160,8 +169,4 @@ export function disposeMenu(): void {
     btn.mesh.dispose();
   }
   buttons = [];
-  if (menuRoot) {
-    menuRoot.dispose();
-    menuRoot = null;
-  }
 }

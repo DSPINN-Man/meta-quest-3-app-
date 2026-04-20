@@ -8,22 +8,18 @@ import {
 import { ENV, XR } from "../utils/config";
 
 /**
- * Creates the dark-room studio environment:
- * - Sets the background color
- * - Adds a large, dark, slightly reflective ground plane
+ * Creates a clean ENSPEC-branded stage:
+ * one dominant light-blue environment with a subtle premium floor,
+ * leaving the white lighting to hero the model instead of the room.
  */
 export function createEnvironment(scene: Scene): Mesh {
-  // Dark background
   scene.clearColor = ENV.clearColor;
-
-  // Subtle ambient so nothing is completely black
   scene.ambientColor = new Color3(
     ENV.ambientIntensity,
     ENV.ambientIntensity,
     ENV.ambientIntensity
   );
 
-  // Ground plane — dark reflective surface for studio look
   const ground = MeshBuilder.CreateGround(
     XR.teleportFloorMeshName,
     { width: ENV.groundSize, height: ENV.groundSize },
@@ -37,10 +33,8 @@ export function createEnvironment(scene: Scene): Mesh {
     ENV.groundReflectivity,
     ENV.groundReflectivity
   );
-  // High specular power = tight, focused highlights (product studio look)
-  groundMat.specularPower = 128;
-  // Faint emissive so the floor edge reads in the dark
-  groundMat.emissiveColor = new Color3(0.01, 0.01, 0.015);
+  groundMat.specularPower = 64;
+  groundMat.emissiveColor = new Color3(0.02, 0.05, 0.06);
   groundMat.alpha = 1;
 
   ground.material = groundMat;

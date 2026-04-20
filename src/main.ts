@@ -1,8 +1,25 @@
 import { Engine, Scene, ArcRotateCamera, Vector3 } from "@babylonjs/core";
 import { createEnvironment } from "./scene/environment";
-import { createLighting, repositionLights, enableInteriorLight, disableInteriorLight } from "./scene/lighting";
+import {
+  createLighting,
+  repositionLights,
+  enableInteriorLight,
+  disableInteriorLight,
+} from "./scene/lighting";
 import { loadModel, ModelInfo } from "./scene/modelLoader";
-import { setupXR, enterVR } from "./interactions/xrSetup";
+import {
+  setupXR,
+  enterVR,
+  recenterUser,
+  moveUserTo,
+  getUserPosition,
+  configureGuidedViewpoints,
+  stepGuidedView,
+  resetGuidedView,
+  onXRButtonAction,
+  onVRStateChanged,
+  type XRButtonAction,
+} from "./interactions/xrSetup";
 import {
   initDoors,
   openAllDoors,
@@ -29,10 +46,21 @@ import {
 } from "./interactions/hotspots";
 import { createFloatingMenu, onMenuButton } from "./ui/floatingMenu";
 import { showInfoPanel, closeInfoPanel } from "./ui/infoPanel";
-import { initOnboarding, runOnboarding } from "./flow/onboarding";
+import {
+  initOnboarding,
+  runOnboarding,
+  isOnboardingActive,
+  onOnboardingCompleted,
+} from "./flow/onboarding";
+import {
+  startScriptedDemo,
+  stopScriptedDemo,
+  shouldAllowScriptedAction,
+  handleScriptedAction,
+} from "./flow/scriptedDemo";
+import { initGuidedPrompt, reparentGuidedPromptToXR } from "./ui/guidedPrompt";
 
 async function main() {
-  // ── Canvas & Engine ───────────────────────────────────────
   const canvas = document.getElementById("renderCanvas") as HTMLCanvasElement;
   if (!canvas) throw new Error("Canvas element #renderCanvas not found.");
 
@@ -43,7 +71,6 @@ async function main() {
 
   const scene = new Scene(engine);
 
-  // ── Desktop Camera (mouse/keyboard fallback) ──────────────
   const camera = new ArcRotateCamera(
     "desktopCam",
     -Math.PI / 2,
@@ -60,22 +87,19 @@ async function main() {
   camera.panningSensibility = 100;
   camera.detachControl();
 
-  // ── Environment (dark room + ground) ──────────────────────
   const ground = createEnvironment(scene);
-
-  // ── Lighting Rig (positions updated after model load) ─────
   const shadowGen = createLighting(scene);
+  initGuidedPrompt(scene);
 
-  // ── Start render loop immediately ─────────────────────────
   engine.runRenderLoop(() => {
     scene.render();
   });
 
-  // ── Load Model ────────────────────────────────────────────
   const loadingEl = document.getElementById("loading");
   const loadingText = document.getElementById("loadingText");
   const loadingBar = document.getElementById("loadingBarFill");
   let modelInfo: ModelInfo | null = null;
+  let inspectActive = false;
 
   try {
     modelInfo = await loadModel(scene, shadowGen, (pct) => {
@@ -87,7 +111,6 @@ async function main() {
     if (loadingText) loadingText.textContent = "Model failed to load. Check console.";
   }
 
-  // ── Adapt scene to model bounds ───────────────────────────
   if (modelInfo && modelInfo.height > 0) {
     repositionLights(modelInfo);
 
@@ -98,12 +121,23 @@ async function main() {
     camera.lowerRadiusLimit = Math.max(h, w) * 0.3;
     camera.upperRadiusLimit = Math.max(h, w) * 8;
 
+    const farDist = Math.max(w * 2.6, 3.4);
+    const midDist = Math.max(w * 2.1, 2.6);
+    const closeDist = Math.max(w * 1.55, 1.9);
+    configureGuidedViewpoints(
+      [
+        new Vector3(modelInfo.center.x, 1.6, modelInfo.center.z - farDist),
+        new Vector3(modelInfo.center.x, 1.6, modelInfo.center.z - midDist),
+        new Vector3(modelInfo.center.x, 1.6, modelInfo.center.z - closeDist),
+      ],
+      1
+    );
+
     console.log(
       `Camera framed: target=(${camera.target.x.toFixed(2)}, ${camera.target.y.toFixed(2)}, ${camera.target.z.toFixed(2)}), radius=${camera.radius.toFixed(2)}`
     );
   }
 
-  // Store camera defaults for the Reset button
   const camDefaults = {
     alpha: camera.alpha,
     beta: camera.beta,
@@ -111,17 +145,30 @@ async function main() {
     target: camera.target.clone(),
   };
 
-  // ── Initialize interaction systems ────────────────────────
   const allMeshes = scene.meshes;
   initDoors(allMeshes);
   initExplodedView(allMeshes);
 
   createHotspots(scene, modelInfo ?? undefined);
   onHotspotActivated((data, worldPos) => {
+    // Always teleport to the clicked hotspot — user should be able to click
+    // any hotspot, any number of times, and get transported there every time.
+    if (isExploded()) {
+      const inspectPosition = computeInspectPosition(
+        worldPos,
+        getUserPosition(),
+        modelInfo?.center ?? Vector3.Zero()
+      );
+      console.log(
+        `Hotspot "${data.id}": teleporting to inspect position ` +
+        `(${inspectPosition.x.toFixed(2)}, ${inspectPosition.y.toFixed(2)}, ${inspectPosition.z.toFixed(2)})`
+      );
+      moveUserTo(inspectPosition);
+      inspectActive = true;
+    }
     showInfoPanel(data, worldPos, scene);
   });
 
-  // ── Helper: Open doors with full side effects ─────────────
   async function doOpenDoors() {
     if (!areDoorsOpen()) {
       await openAllDoors(scene);
@@ -130,14 +177,11 @@ async function main() {
     enableInteriorLight();
   }
 
-  // ── Helper: Close doors with full side effects ────────────
   async function doCloseDoors() {
     if (areDoorsOpen() || isExteriorFaded()) {
-      // Collapse exploded view first if active
       if (isExploded()) {
         await collapse(scene);
       }
-      // Unfade exterior if it was faded (from exploded view)
       if (isExteriorFaded()) {
         await unfadeExterior(scene);
       }
@@ -148,126 +192,216 @@ async function main() {
     }
   }
 
-  // ── Helper: Full reset ────────────────────────────────────
+  async function doToggleInterior() {
+    if (areDoorsOpen() || isExteriorFaded()) {
+      await doCloseDoors();
+    } else {
+      await doOpenDoors();
+    }
+  }
+
+  async function doToggleExploded() {
+    if (isExploded()) {
+      await collapse(scene);
+      await unfadeExterior(scene);
+      hideHotspots();
+      disableInteriorLight();
+      await closeAllDoors(scene);
+      return;
+    }
+
+    if (!areDoorsOpen()) {
+      await openAllDoors(scene);
+    }
+    await fadeExterior(scene);
+    enableInteriorLight();
+    showHotspots();
+    await toggleExplodedView(scene);
+  }
+
   function doReset() {
+    inspectActive = false;
     resetExplodedView();
     resetDoors();
+    resetGuidedView();
     hideHotspots();
     closeInfoPanel();
     disableInteriorLight();
+    recenterUser();
     camera.alpha = camDefaults.alpha;
     camera.beta = camDefaults.beta;
     camera.radius = camDefaults.radius;
     camera.target = camDefaults.target.clone();
   }
 
-  // ── Floating 3D Menu ──────────────────────────────────────
+  async function runMappedAction(action: XRButtonAction) {
+    switch (action) {
+      case "move_closer":
+        stepGuidedView(1);
+        break;
+      case "move_back":
+        stepGuidedView(-1);
+        break;
+      case "toggle_interior":
+        await doToggleInterior();
+        break;
+      case "toggle_explode":
+        await doToggleExploded();
+        break;
+      case "reset_view":
+        doReset();
+        break;
+    }
+  }
+
+  async function handleXRAction(action: XRButtonAction) {
+    if (inspectActive && action === "move_back") {
+      inspectActive = false;
+      closeInfoPanel();
+      stepGuidedView(-1);
+      return;
+    }
+
+    if (!shouldAllowScriptedAction(action)) {
+      handleScriptedAction(action);
+      return;
+    }
+
+    await runMappedAction(action);
+    handleScriptedAction(action);
+  }
+
   createFloatingMenu(scene, modelInfo ?? undefined);
   onMenuButton((id) => {
     switch (id) {
-      case "open_doors":
-        doOpenDoors();
+      case "move_closer":
+        void handleXRAction("move_closer");
         break;
-      case "close_doors":
-        doCloseDoors();
+      case "move_back":
+        void handleXRAction("move_back");
         break;
-      case "exploded_view":
-        // Toggle exploded view with exterior fade
-        (async () => {
-          if (isExploded()) {
-            // Collapsing: restore parts, then unfade exterior, then close doors
-            await collapse(scene);
-            await unfadeExterior(scene);
-            hideHotspots();
-            disableInteriorLight();
-            await closeAllDoors(scene);
-          } else {
-            // Exploding: open doors, fade exterior, then explode parts
-            if (!areDoorsOpen()) {
-              await openAllDoors(scene);
-            }
-            await fadeExterior(scene);
-            enableInteriorLight();
-            showHotspots();
-            await toggleExplodedView(scene);
-          }
-        })();
+      case "toggle_interior":
+        void handleXRAction("toggle_interior");
+        break;
+      case "toggle_explode":
+        void handleXRAction("toggle_explode");
         break;
       case "reset":
-        doReset();
+        void handleXRAction("reset_view");
         break;
     }
   });
 
-  // ── WebXR Setup ───────────────────────────────────────────
-  const xr = await setupXR(scene, ground);
+  const xr = await setupXR(scene, ground, modelInfo ?? undefined);
 
   const vrBtn = document.getElementById("enterVR");
   if (xr && vrBtn) {
     vrBtn.style.display = "inline-flex";
     vrBtn.addEventListener("click", () => {
-      enterVR();
+      void enterVR();
     });
   }
 
-  // ── Hide Loading Overlay ──────────────────────────────────
   if (loadingEl) {
     loadingEl.classList.add("hidden");
     setTimeout(() => loadingEl.remove(), 600);
   }
 
-  // ── Initialize & Start Onboarding Flow ────────────────────
   initOnboarding(scene, camera);
-  runOnboarding();
 
-  // ── Keyboard Shortcuts (desktop testing) ──────────────────
+  if (!xr) {
+    void runOnboarding();
+  }
+
+  onOnboardingCompleted.add((inVR) => {
+    if (inVR) {
+      startScriptedDemo();
+    } else {
+      stopScriptedDemo();
+    }
+  });
+
+  onVRStateChanged.add((inVR) => {
+    if (inVR) {
+      // Re-parent UI elements that were created before XR was ready
+      reparentGuidedPromptToXR();
+      void runOnboarding();
+    } else {
+      stopScriptedDemo();
+      hideHotspots();
+      closeInfoPanel();
+      inspectActive = false;
+    }
+  });
+
+  onXRButtonAction.add((action) => {
+    if (isOnboardingActive()) return;
+    void handleXRAction(action);
+  });
+
   window.addEventListener("keydown", (e) => {
     switch (e.key.toLowerCase()) {
       case "d":
-        if (areDoorsOpen()) {
-          doCloseDoors();
-        } else {
-          doOpenDoors();
-        }
+        void handleXRAction("toggle_interior");
         break;
       case "e":
-        (async () => {
-          if (isExploded()) {
-            await collapse(scene);
-            await unfadeExterior(scene);
-            hideHotspots();
-            disableInteriorLight();
-            await closeAllDoors(scene);
-          } else {
-            if (!areDoorsOpen()) await openAllDoors(scene);
-            await fadeExterior(scene);
-            enableInteriorLight();
-            showHotspots();
-            await toggleExplodedView(scene);
-          }
-        })();
+        void handleXRAction("toggle_explode");
         break;
       case "h":
         toggleHotspots();
         break;
       case "r":
-        doReset();
+        void handleXRAction("reset_view");
         break;
       case "escape":
         closeInfoPanel();
+        break;
+      case "a":
+        void handleXRAction("move_closer");
+        break;
+      case "b":
+        void handleXRAction("move_back");
         break;
     }
   });
 
   console.log(
-    "%c Keyboard shortcuts: D = doors, E = explode, H = hotspots, R = reset, Esc = close panel",
+    "%c Keyboard shortcuts: A = closer, B = back, D = interior, E = explode, R = reset",
     "color: #81c784; font-weight: bold"
   );
 
-  // ── Resize Handling ───────────────────────────────────────
   window.addEventListener("resize", () => {
     engine.resize();
   });
+}
+
+function computeInspectPosition(
+  target: Vector3,
+  currentUserPosition: Vector3,
+  modelCenter: Vector3
+): Vector3 {
+  const offset = target.subtract(currentUserPosition);
+  offset.y = 0;
+
+  if (offset.lengthSquared() < 0.0001) {
+    offset.copyFrom(target.subtract(modelCenter));
+    offset.y = 0;
+  } else {
+    offset.normalize();
+  }
+
+  if (offset.lengthSquared() < 0.0001) {
+    offset.set(0, 0, -1);
+  } else {
+    offset.normalize();
+  }
+
+  const distance = 0.95;
+  return new Vector3(
+    target.x - offset.x * distance,
+    Math.max(1.25, target.y + 0.12),
+    target.z - offset.z * distance
+  );
 }
 
 main().catch((err) => {

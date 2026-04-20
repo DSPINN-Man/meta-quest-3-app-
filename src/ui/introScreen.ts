@@ -2,23 +2,24 @@ import {
   Scene,
   Mesh,
   MeshBuilder,
-  Vector3,
-  VideoTexture,
-  StandardMaterial,
-  Color3,
 } from "@babylonjs/core";
+import {
+  AdvancedDynamicTexture,
+  Rectangle,
+  TextBlock,
+  StackPanel,
+  Control,
+} from "@babylonjs/gui";
+import { getXR } from "../interactions/xrSetup";
 
 /**
- * Full-screen branded intro: plays the Enspec intro video,
- * then fades out. Uses an HTML <video> overlay on desktop
- * and a VideoTexture on a 3D plane in VR.
- *
- * Robust: if the video fails to load/play for ANY reason,
- * the intro auto-resolves so the app continues.
+ * Desktop keeps the ENSPEC intro video.
+ * VR uses a deterministic branded title card because Quest browser video-on-mesh
+ * proved unreliable and was blocking the onboarding flow.
  */
 
 let introMesh: Mesh | null = null;
-let introMaterial: StandardMaterial | null = null;
+let introTexture: AdvancedDynamicTexture | null = null;
 let videoEl: HTMLVideoElement | null = null;
 let overlayEl: HTMLDivElement | null = null;
 let resolvePromise: (() => void) | null = null;
@@ -26,24 +27,17 @@ let disposed = false;
 let safetyTimer: ReturnType<typeof setTimeout> | null = null;
 
 const VIDEO_SRC = "enspec-intro.mp4";
-/** Fade-out duration in seconds */
 const FADE_OUT = 0.5;
+const VR_INTRO_MS = 2600;
 
-/**
- * Show the intro video and resolve when done.
- */
-export function showIntroScreen(
-  scene: Scene,
-  isVR = false
-): Promise<void> {
+export function showIntroScreen(scene: Scene, isVR = false): Promise<void> {
   disposed = false;
 
   return new Promise((resolve) => {
     resolvePromise = resolve;
 
-    // Safety net: if ANYTHING goes wrong, resolve after 15s max
     safetyTimer = setTimeout(() => {
-      console.warn("Intro: safety timeout — forcing dispose");
+      console.warn("Intro: safety timeout - forcing dispose");
       disposeIntro();
     }, 15000);
 
@@ -54,20 +48,15 @@ export function showIntroScreen(
         showDesktopIntro();
       }
     } catch (err) {
-      console.error("Intro: failed to create —", err);
+      console.error("Intro: failed to create -", err);
       disposeIntro();
     }
   });
 }
 
-/**
- * Immediately skip and dispose the intro.
- */
 export function skipIntro(): void {
   disposeIntro();
 }
-
-// ── Desktop: HTML <video> overlay ────────────────────────────
 
 function showDesktopIntro(): void {
   overlayEl = document.createElement("div");
@@ -89,102 +78,138 @@ function showDesktopIntro(): void {
   overlayEl.appendChild(videoEl);
   document.body.appendChild(overlayEl);
 
-  // Video ended → fade out
   videoEl.addEventListener("ended", () => {
-    console.log("Intro: video ended normally");
     fadeOutAndDispose();
   });
 
-  // Video error → skip immediately
-  videoEl.addEventListener("error", (e) => {
-    console.warn("Intro: video error —", e);
+  videoEl.addEventListener("error", () => {
     disposeIntro();
   });
 
-  // Stall detection: if video hasn't started playing in 3 seconds, skip
   const stallCheck = setTimeout(() => {
     if (videoEl && videoEl.readyState < 2) {
-      console.warn("Intro: video stalled (not enough data) — skipping");
       disposeIntro();
     }
   }, 3000);
 
-  // Try autoplay with sound first
   videoEl.play()
     .then(() => {
       clearTimeout(stallCheck);
-      console.log("Intro: video playing");
     })
     .catch(() => {
-      // Autoplay with sound blocked — retry muted
-      console.log("Intro: autoplay blocked, retrying muted");
       videoEl!.muted = true;
       videoEl!.play()
-        .then(() => {
+        .then(() => clearTimeout(stallCheck))
+        .catch(() => {
           clearTimeout(stallCheck);
-          console.log("Intro: video playing (muted)");
-        })
-        .catch((err) => {
-          clearTimeout(stallCheck);
-          console.warn("Intro: play failed entirely —", err);
           disposeIntro();
         });
     });
 }
 
-// ── VR: Video texture on a 3D plane ─────────────────────────
-
 function showVRIntro(scene: Scene): void {
   introMesh = MeshBuilder.CreatePlane(
-    "introVideoPlane",
-    { width: 3.2, height: 1.8 },
+    "introBrandPlane",
+    { width: 2.5, height: 1.2 },
     scene
   );
-  introMesh.position = new Vector3(0, 1.6, -2);
-  introMesh.billboardMode = Mesh.BILLBOARDMODE_ALL;
   introMesh.isPickable = false;
+  attachMeshToViewer(introMesh, -1.55, 0.02);
+  introTexture = AdvancedDynamicTexture.CreateForMesh(introMesh, 1200, 576);
 
-  const videoTex = new VideoTexture(
-    "introVidTex",
-    VIDEO_SRC,
-    scene,
-    false,
-    true,
-    VideoTexture.TRILINEAR_SAMPLINGMODE,
-    { autoPlay: true, muted: false, loop: false }
+  const bg = new Rectangle("introBg");
+  bg.width = 1;
+  bg.height = 1;
+  bg.cornerRadius = 34;
+  bg.thickness = 2;
+  bg.color = "rgba(255,255,255,0.28)";
+  bg.background = "rgba(9, 20, 28, 0.78)";
+  bg.shadowColor = "rgba(0,0,0,0.30)";
+  bg.shadowBlur = 24;
+  bg.shadowOffsetY = 4;
+  introTexture.addControl(bg);
+
+  const stack = new StackPanel("introStack");
+  stack.isVertical = true;
+  stack.paddingTopInPixels = 70;
+  stack.paddingLeftInPixels = 70;
+  stack.paddingRightInPixels = 70;
+  bg.addControl(stack);
+
+  const brand = new TextBlock("introBrand", "ENSPEC");
+  brand.color = "rgba(255,255,255,0.97)";
+  brand.fontSize = 76;
+  brand.fontWeight = "700";
+  brand.fontFamily = "system-ui, -apple-system, 'SF Pro Display', sans-serif";
+  brand.height = "90px";
+  brand.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
+  stack.addControl(brand);
+
+  const title = new TextBlock("introTitle", "Interactive Product Showcase");
+  title.color = "rgba(212, 238, 244, 0.95)";
+  title.fontSize = 34;
+  title.fontFamily = "system-ui, -apple-system, 'SF Pro Text', sans-serif";
+  title.height = "54px";
+  title.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
+  stack.addControl(title);
+
+  const subtitle = new TextBlock(
+    "introSubtitle",
+    "A guided Meta Quest 3 experience"
   );
+  subtitle.color = "rgba(135, 218, 235, 0.92)";
+  subtitle.fontSize = 26;
+  subtitle.fontFamily = "system-ui, -apple-system, 'SF Pro Text', sans-serif";
+  subtitle.height = "44px";
+  subtitle.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
+  stack.addControl(subtitle);
 
-  introMaterial = new StandardMaterial("introVidMat", scene);
-  introMaterial.diffuseTexture = videoTex;
-  introMaterial.emissiveColor = new Color3(1, 1, 1);
-  introMaterial.disableLighting = true;
-  introMaterial.backFaceCulling = false;
-  introMesh.material = introMaterial;
-
-  videoEl = videoTex.video;
-
-  videoEl.addEventListener("ended", () => {
-    console.log("Intro VR: video ended");
+  runSceneTimer(scene, VR_INTRO_MS, () => {
     fadeOutAndDispose();
-  });
-
-  videoEl.addEventListener("error", () => {
-    console.warn("Intro VR: video error — skipping");
-    disposeIntro();
   });
 }
 
-// ── Fade out then dispose ────────────────────────────────────
+function attachMeshToViewer(mesh: Mesh, zOffset: number, yOffset = 0): void {
+  const xr = getXR();
+  const xrCamera = xr?.baseExperience.camera;
+  if (xrCamera) {
+    mesh.parent = xrCamera;
+    mesh.position.set(0, yOffset, zOffset);
+    mesh.rotation.set(0, 0, 0);
+    return;
+  }
+
+  mesh.position.set(0, 1.6 + yOffset, zOffset);
+  mesh.billboardMode = Mesh.BILLBOARDMODE_ALL;
+}
+
+function runSceneTimer(
+  scene: Scene,
+  durationMs: number,
+  onDone: () => void
+): void {
+  let elapsed = 0;
+  const observer = scene.onBeforeRenderObservable.add(() => {
+    if (disposed) {
+      scene.onBeforeRenderObservable.remove(observer);
+      return;
+    }
+
+    elapsed += scene.getEngine().getDeltaTime();
+    if (elapsed >= durationMs) {
+      scene.onBeforeRenderObservable.remove(observer);
+      onDone();
+    }
+  });
+}
 
 function fadeOutAndDispose(): void {
   if (disposed) return;
 
-  // Fade the overlay
   if (overlayEl) {
     overlayEl.style.opacity = "0";
   }
 
-  // Fade VR mesh
   if (introMesh) {
     const scene = introMesh.getScene();
     const start = performance.now();
@@ -200,46 +225,36 @@ function fadeOutAndDispose(): void {
     return;
   }
 
-  // Desktop: wait for CSS opacity transition, then dispose
   setTimeout(() => disposeIntro(), FADE_OUT * 1000 + 100);
 }
-
-// ── Cleanup ──────────────────────────────────────────────────
 
 function disposeIntro(): void {
   if (disposed) return;
   disposed = true;
 
-  // Clear safety timer
   if (safetyTimer) {
     clearTimeout(safetyTimer);
     safetyTimer = null;
   }
 
-  // Clean up video element
   if (videoEl) {
     try {
       videoEl.pause();
       videoEl.removeAttribute("src");
       videoEl.load();
-    } catch (_) {
+    } catch {
       // ignore cleanup errors
     }
   }
 
-  // Remove HTML overlay
   if (overlayEl) {
     overlayEl.remove();
     overlayEl = null;
   }
 
-  // Dispose VR resources
-  if (introMaterial) {
-    if (introMaterial.diffuseTexture) {
-      introMaterial.diffuseTexture.dispose();
-    }
-    introMaterial.dispose();
-    introMaterial = null;
+  if (introTexture) {
+    introTexture.dispose();
+    introTexture = null;
   }
   if (introMesh) {
     introMesh.dispose();
@@ -248,12 +263,9 @@ function disposeIntro(): void {
 
   videoEl = null;
 
-  // Resolve the promise so onboarding continues
   if (resolvePromise) {
     const r = resolvePromise;
     resolvePromise = null;
     r();
   }
-
-  console.log("Intro: disposed, continuing to next phase");
 }

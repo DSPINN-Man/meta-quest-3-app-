@@ -13,6 +13,18 @@ let lastActivity = 0;
 let checkInterval: ReturnType<typeof setInterval> | null = null;
 let onResetCallback: (() => void) | null = null;
 let armed = false;
+let listenersAttached = false;
+
+const ACTIVITY_EVENTS = [
+  "mousedown",
+  "mousemove",
+  "keydown",
+  "pointerdown",
+  "pointermove",
+  "touchstart",
+  "wheel",
+  "gamepadconnected",
+] as const;
 
 /** Called on any user input — resets the idle timer */
 function recordActivity(): void {
@@ -28,19 +40,11 @@ export function startKioskWatch(onReset: () => void): void {
   lastActivity = performance.now();
   armed = true;
 
-  // Listen to a wide range of input events
-  const events = [
-    "mousedown",
-    "mousemove",
-    "keydown",
-    "pointerdown",
-    "pointermove",
-    "touchstart",
-    "wheel",
-    "gamepadconnected",
-  ];
-  for (const evt of events) {
-    window.addEventListener(evt, recordActivity, { passive: true });
+  if (!listenersAttached) {
+    for (const evt of ACTIVITY_EVENTS) {
+      window.addEventListener(evt, recordActivity, { passive: true });
+    }
+    listenersAttached = true;
   }
 
   // Check every second
@@ -84,5 +88,11 @@ export function stopKioskWatch(): void {
   if (checkInterval) {
     clearInterval(checkInterval);
     checkInterval = null;
+  }
+  if (listenersAttached) {
+    for (const evt of ACTIVITY_EVENTS) {
+      window.removeEventListener(evt, recordActivity);
+    }
+    listenersAttached = false;
   }
 }
