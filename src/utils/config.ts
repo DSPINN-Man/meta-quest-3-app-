@@ -95,37 +95,37 @@ export const HOTSPOTS: HotspotData[] = [
   {
     id: "busbar",
     meshName: "busbar_assembly",
-    title: "Busbar System",
+    title: "Busbar System — 3150A",
     description:
-      "Copper conductors rated for 3150A continuous current. Distributes power across all circuits with minimal resistance loss.",
+      "Tin-plated copper busbars rated for 3150A continuous current. Low-impedance distribution backbone connecting all outgoing circuits. Designed to BS EN 61439 with verified temperature rise limits.",
   },
   {
     id: "capacitor",
     meshName: "capacitor_bank",
     title: "HV Capacitor Bank",
     description:
-      "Power factor correction and harmonic filtering. High-voltage capacitor bank for reactive power compensation.",
+      "Reactive power compensation unit for power factor correction. Reduces kVAr demand charges and harmonics. Automatic staged switching responds to real-time load conditions at the Indian Queens site.",
   },
   {
     id: "cable",
     meshName: "cable_assembly",
-    title: "Cable Management",
+    title: "Cable Management System",
     description:
-      "Segregated power and control cable routing. Structured pathways ensure safety compliance and serviceability.",
+      "Fully segregated power and control cable routing. Structured pathways with fire barriers between compartments ensure BS 7671 compliance and safe, tool-free access for maintenance teams.",
   },
   {
     id: "terminal",
     meshName: "terminal_rail_01",
-    title: "Terminal Rails",
+    title: "Protection & Control Rails",
     description:
-      "PLC, MCB, and relay mounting with DIN rail. Terminal blocks and control modules for circuit monitoring.",
+      "DIN-rail mounted protection relays, MCBs, and PLC I/O modules. Each circuit is individually monitored — fault detection, load measurement, and remote trip capability for NGET SCADA integration.",
   },
   {
     id: "cablebox",
     meshName: "cable_box_main",
-    title: "Cable Entry Boxes",
+    title: "Cable Entry System",
     description:
-      "Sealed cable entry points with gland plates. Provides IP-rated cable management for incoming and outgoing power feeds.",
+      "IP65-rated cable entry boxes with compression glands. Accommodates 11kV and 33kV power feeds with EMC screening. Gland plates allow future cable additions without panel modification.",
     yBoost: 0.4,
   },
 ];
@@ -164,3 +164,34 @@ export const XR = {
   floorHeight: 0,
   teleportFloorMeshName: "ground",
 };
+
+// Meshes to hide on load — base frame, cable trays, underground parts.
+// Matched by substring (case-insensitive). Add more patterns after
+// checking the console mesh name log.
+export const HIDE_MESH_PATTERNS = [
+  "base_frame",
+  "plinth",
+  "foundation",
+  "cable_tray",
+  "cable_ladder",
+  "floor_plate",
+  "mounting_rail",
+];
+
+/** Also hide any mesh whose bounding box center is below this Y (meters, after scaling) */
+export const HIDE_BELOW_Y = -0.15;
+
+// Skybox / environment backgrounds
+export interface SkyboxOption {
+  id: string;
+  label: string;
+  /** Path to equirectangular image in public/textures/. null = solid color (current default) */
+  file: string | null;
+}
+
+export const SKYBOX_OPTIONS: SkyboxOption[] = [
+  { id: "dark_studio", label: "Dark Studio", file: null },
+  { id: "industrial", label: "Industrial Facility", file: "skybox_industrial.jpg" },
+  { id: "showroom", label: "Exhibition Hall", file: "skybox_showroom.jpg" },
+  { id: "site", label: "Indian Queens Site", file: "skybox_site.jpg" },
+];

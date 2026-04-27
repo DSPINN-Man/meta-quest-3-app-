@@ -6,7 +6,7 @@ import {
   Vector3,
 } from "@babylonjs/core";
 import "@babylonjs/loaders/glTF";
-import { MODEL } from "../utils/config";
+import { MODEL, HIDE_MESH_PATTERNS, HIDE_BELOW_Y } from "../utils/config";
 
 /**
  * Information about the loaded & scaled model, returned so other systems
@@ -143,9 +143,31 @@ export async function loadModel(
   console.log(`  Final center: (${finalCenter.x.toFixed(3)}, ${finalCenter.y.toFixed(3)}, ${finalCenter.z.toFixed(3)})`);
   console.log(`  Final Y range: ${final.min.y.toFixed(4)} to ${final.max.y.toFixed(4)} (should start at ~0)`);
 
+  // ── Hide underground / base meshes ──────────────────────────
+  let hiddenCount = 0;
+  for (const mesh of meshes) {
+    if (mesh.getTotalVertices() === 0) continue;
+
+    const lower = mesh.name.toLowerCase();
+    const matchesPattern = HIDE_MESH_PATTERNS.some((p) => lower.includes(p));
+
+    // Check if mesh center is below ground level
+    mesh.computeWorldMatrix(true);
+    const meshCenter = mesh.getBoundingInfo().boundingBox.centerWorld;
+    const belowGround = meshCenter.y < HIDE_BELOW_Y;
+
+    if (matchesPattern || belowGround) {
+      mesh.setEnabled(false);
+      hiddenCount++;
+      console.log(`  HIDDEN: "${mesh.name}" (${matchesPattern ? "name match" : `below Y=${meshCenter.y.toFixed(3)}`})`);
+    }
+  }
+  console.log(`  Hidden meshes: ${hiddenCount}`);
+
   // ── Shadows ─────────────────────────────────────────────────
   let shadowCasters = 0;
   for (const mesh of meshes) {
+    if (!mesh.isEnabled()) continue;
     const verts = mesh.getTotalVertices();
     if (verts > 0 && verts < 50000) {
       shadowGen.addShadowCaster(mesh);

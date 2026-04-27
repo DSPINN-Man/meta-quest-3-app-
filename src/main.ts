@@ -70,6 +70,9 @@ import {
   isGuidedPromptVisible,
 } from "./ui/guidedPrompt";
 import { onLongPress } from "./interactions/xrSetup";
+import { initSkybox, setSkybox } from "./scene/skybox";
+import { showVRChoiceScreen } from "./ui/vrChoiceScreen";
+import { runQuickTour } from "./flow/quickTour";
 
 async function main() {
   const canvas = document.getElementById("renderCanvas") as HTMLCanvasElement;
@@ -100,6 +103,7 @@ async function main() {
 
   const ground = createEnvironment(scene);
   const shadowGen = createLighting(scene);
+  initSkybox(scene);
   initGuidedPrompt(scene);
 
   engine.runRenderLoop(() => {
@@ -402,12 +406,33 @@ async function main() {
   onVRStateChanged.add((inVR) => {
     if (inVR) {
       reparentGuidedPromptToXR();
-      showMenu();
 
-      // Start guided tutorial
-      tutorialStep = 0;
-      showTutorialStep();
-      console.log("VR entered — tutorial started.");
+      // Show choice screen, then start the selected experience
+      void (async () => {
+        const choices = await showVRChoiceScreen(scene);
+        console.log(`VR choices: mode=${choices.mode}, skybox=${choices.skyboxId}`);
+
+        // Apply skybox choice
+        setSkybox(scene, choices.skyboxId);
+
+        showMenu();
+
+        if (choices.mode === "quick") {
+          // Auto-guided tour — user watches
+          await runQuickTour(scene, {
+            moveCloser: () => stepGuidedView(1),
+            revealInterior: () => doToggleInterior(),
+            explode: () => doToggleExploded(),
+            reset: () => doReset(),
+          });
+        } else {
+          // Full experience — start guided tutorial
+          tutorialStep = 0;
+          showTutorialStep();
+        }
+
+        console.log("VR experience started.");
+      })();
     } else {
       stopScriptedDemo();
       hideHotspots();
