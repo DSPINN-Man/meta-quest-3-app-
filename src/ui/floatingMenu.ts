@@ -60,6 +60,7 @@ export function createFloatingMenu(scene: Scene, modelInfo?: ModelInfo): void {
     { label: "B  Back", id: "move_back" },
     { label: "X  Interior", id: "toggle_interior" },
     { label: "Y  Explode", id: "toggle_explode" },
+    { label: "Quick Tour", id: "quick_tour" },
     { label: "Reset View", id: "reset" },
   ];
 

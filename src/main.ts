@@ -301,6 +301,19 @@ async function main() {
       case "reset":
         void handleXRAction("reset_view");
         break;
+      case "quick_tour":
+        void (async () => {
+          doReset();
+          hideGuidedPrompt();
+          tutorialStep = -1;
+          await runQuickTour(scene, {
+            moveCloser: () => stepGuidedView(1),
+            revealInterior: () => doToggleInterior(),
+            explode: () => doToggleExploded(),
+            reset: () => doReset(),
+          });
+        })();
+        break;
     }
   });
 
@@ -406,33 +419,12 @@ async function main() {
   onVRStateChanged.add((inVR) => {
     if (inVR) {
       reparentGuidedPromptToXR();
+      showMenu();
 
-      // Show choice screen, then start the selected experience
-      void (async () => {
-        const choices = await showVRChoiceScreen(scene);
-        console.log(`VR choices: mode=${choices.mode}, skybox=${choices.skyboxId}`);
-
-        // Apply skybox choice
-        setSkybox(scene, choices.skyboxId);
-
-        showMenu();
-
-        if (choices.mode === "quick") {
-          // Auto-guided tour — user watches
-          await runQuickTour(scene, {
-            moveCloser: () => stepGuidedView(1),
-            revealInterior: () => doToggleInterior(),
-            explode: () => doToggleExploded(),
-            reset: () => doReset(),
-          });
-        } else {
-          // Full experience — start guided tutorial
-          tutorialStep = 0;
-          showTutorialStep();
-        }
-
-        console.log("VR experience started.");
-      })();
+      // Start guided tutorial immediately
+      tutorialStep = 0;
+      showTutorialStep();
+      console.log("VR entered — menu + tutorial shown.");
     } else {
       stopScriptedDemo();
       hideHotspots();
