@@ -70,7 +70,7 @@ export function createFloatingMenu(scene: Scene, modelInfo?: ModelInfo): void {
 
   for (let i = 0; i < buttonDefs.length; i++) {
     const def = buttonDefs[i];
-    const isReset = def.id === "reset";
+    const isReset = def.id === "reset" || def.id === "quick_tour";
     const yOffset = (buttonDefs.length / 2 - i - 0.5) * (btnHeight + gap);
 
     const plane = MeshBuilder.CreatePlane(

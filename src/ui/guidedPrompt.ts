@@ -22,15 +22,15 @@ let bodyBlock: TextBlock | null = null;
 let footerBlock: TextBlock | null = null;
 
 /** Fixed offset from the XR camera / viewer. */
-const VIEWER_Z_OFFSET = -1.08;
-const VIEWER_Y_OFFSET = 0.2;
+const VIEWER_Z_OFFSET = -1.8;
+const VIEWER_Y_OFFSET = -0.1;
 
 export function initGuidedPrompt(scene: Scene): void {
   if (promptMesh || promptTexture) return;
 
   promptMesh = MeshBuilder.CreatePlane(
     "guidedPromptPlane",
-    { width: 1.55, height: 0.72 },
+    { width: 2.0, height: 0.9 },
     scene
   );
   promptMesh.isPickable = false;
@@ -105,13 +105,16 @@ export function showGuidedPrompt(
   body: string,
   footer = ""
 ): void {
-  if (!promptMesh || !titleBlock || !bodyBlock || !footerBlock) return;
+  if (!promptMesh || !titleBlock || !bodyBlock || !footerBlock) {
+    console.error("showGuidedPrompt: mesh or text blocks not initialized!");
+    return;
+  }
   titleBlock.text = title;
   bodyBlock.text = body;
   footerBlock.text = footer;
-  // Make absolutely sure we're tracking the viewer whenever we go visible.
   attachToViewer(promptMesh);
   promptMesh.setEnabled(true);
+  console.log(`showGuidedPrompt: "${title}" — parent=${promptMesh.parent?.name ?? "none"}, enabled=${promptMesh.isEnabled()}, pos=(${promptMesh.position.x.toFixed(2)}, ${promptMesh.position.y.toFixed(2)}, ${promptMesh.position.z.toFixed(2)})`);
 }
 
 export function hideGuidedPrompt(): void {
