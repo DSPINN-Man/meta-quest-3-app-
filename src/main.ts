@@ -103,8 +103,6 @@ async function main() {
 
   const ground = createEnvironment(scene);
   const shadowGen = createLighting(scene);
-  initSkybox(scene);
-  initGuidedPrompt(scene);
 
   engine.runRenderLoop(() => {
     scene.render();
@@ -160,9 +158,13 @@ async function main() {
     target: camera.target.clone(),
   };
 
-  const allMeshes = scene.meshes;
+  const allMeshes = scene.meshes.slice(); // snapshot before adding UI meshes
   initDoors(allMeshes);
   initExplodedView(allMeshes);
+
+  // Init UI meshes AFTER door system so they don't get faded with exterior
+  initSkybox(scene);
+  initGuidedPrompt(scene);
 
   createHotspots(scene, modelInfo ?? undefined);
   onHotspotActivated((data, worldPos) => {
