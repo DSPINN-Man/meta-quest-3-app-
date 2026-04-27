@@ -25,6 +25,7 @@ import type { ModelInfo } from "../scene/modelLoader";
 interface HotspotMarker {
   data: HotspotData;
   sphere: Mesh;
+  ring: Mesh;
   stem: Mesh;
   /** The mesh this hotspot is anchored to */
   targetMesh: AbstractMesh;
@@ -89,10 +90,11 @@ export function createHotspots(scene: Scene, modelInfo?: ModelInfo): void {
     const bb = targetMesh.getBoundingInfo().boundingBox;
     const center = bb.centerWorld.clone();
     const pos = center.clone();
-    pos.y += yOffset;
+    const boost = hotspot.yBoost ?? 0;
+    pos.y += yOffset + boost;
 
     console.log(
-      `  Hotspot "${hotspot.id}" → mesh "${targetMesh.name}" at (${pos.x.toFixed(3)}, ${pos.y.toFixed(3)}, ${pos.z.toFixed(3)})`
+      `  Hotspot "${hotspot.id}" → mesh "${targetMesh.name}" at (${pos.x.toFixed(3)}, ${pos.y.toFixed(3)}, ${pos.z.toFixed(3)})${boost ? ` (yBoost: ${boost})` : ""}`
     );
 
     // ── Glowing sphere ────────────────────────────────────────
@@ -105,6 +107,28 @@ export function createHotspots(scene: Scene, modelInfo?: ModelInfo): void {
     sphere.material = mat;
     sphere.receiveShadows = false;
     sphere.isPickable = true;
+
+    // ── Border ring — bright outline for visibility ───────────
+    const ring = MeshBuilder.CreateTorus(
+      `ring_${hotspot.id}`,
+      {
+        diameter: sphereRadius * 2.8,
+        thickness: sphereRadius * 0.2,
+        tessellation: 24,
+      },
+      scene
+    );
+    ring.position = pos.clone();
+    ring.rotation.x = Math.PI / 2; // lay flat around sphere
+    const ringMat = new StandardMaterial(`ringMat_${hotspot.id}`, scene);
+    ringMat.emissiveColor = new Color3(1, 1, 1);
+    ringMat.diffuseColor = Color3.Black();
+    ringMat.specularColor = Color3.Black();
+    ringMat.alpha = 0.7;
+    ringMat.disableLighting = true;
+    ring.material = ringMat;
+    ring.isPickable = false;
+    ring.receiveShadows = false;
 
     // ── Pulsing animation ─────────────────────────────────────
     createPulseAnimation(sphere, scene);
@@ -134,10 +158,11 @@ export function createHotspots(scene: Scene, modelInfo?: ModelInfo): void {
     stem.isPickable = false;
     stem.receiveShadows = false;
 
-    markers.push({ data: hotspot, sphere, stem, targetMesh, yOffset, stemLength });
+    markers.push({ data: hotspot, sphere, ring, stem, targetMesh, yOffset: yOffset + boost, stemLength });
 
     // Start HIDDEN
     sphere.setEnabled(false);
+    ring.setEnabled(false);
     stem.setEnabled(false);
   }
 
@@ -155,15 +180,22 @@ export function createHotspots(scene: Scene, modelInfo?: ModelInfo): void {
       const bb = m.targetMesh.getBoundingInfo().boundingBox;
       const center = bb.centerWorld;
 
+      const py = center.y + m.yOffset;
+
       // Sphere above center
       m.sphere.position.x = center.x;
-      m.sphere.position.y = center.y + m.yOffset;
+      m.sphere.position.y = py;
       m.sphere.position.z = center.z;
+
+      // Ring around sphere
+      m.ring.position.x = center.x;
+      m.ring.position.y = py;
+      m.ring.position.z = center.z;
 
       // Stem below sphere
       const sphereRadius = m.sphere.getBoundingInfo().boundingBox.extendSizeWorld.y;
       m.stem.position.x = center.x;
-      m.stem.position.y = center.y + m.yOffset - sphereRadius - m.stemLength / 2;
+      m.stem.position.y = py - sphereRadius - m.stemLength / 2;
       m.stem.position.z = center.z;
     }
   });
@@ -221,6 +253,7 @@ function createPulseAnimation(sphere: Mesh, scene: Scene): void {
 export function showHotspots(): void {
   for (const m of markers) {
     m.sphere.setEnabled(true);
+    m.ring.setEnabled(true);
     m.stem.setEnabled(true);
   }
   visible = true;
@@ -230,6 +263,7 @@ export function showHotspots(): void {
 export function hideHotspots(): void {
   for (const m of markers) {
     m.sphere.setEnabled(false);
+    m.ring.setEnabled(false);
     m.stem.setEnabled(false);
   }
   visible = false;

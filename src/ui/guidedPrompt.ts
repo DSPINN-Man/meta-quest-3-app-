@@ -119,6 +119,26 @@ export function hideGuidedPrompt(): void {
   promptMesh.setEnabled(false);
 }
 
+/** Show the controls help card — dismissed by any button press */
+export function showHelpCard(): void {
+  showGuidedPrompt(
+    "Controls",
+    "A — Move closer\n" +
+    "B — Step back / close info\n" +
+    "X — Reveal interior\n" +
+    "Y — Exploded view\n" +
+    "Right stick — Move around\n" +
+    "Left stick — Spin model\n" +
+    "Trigger — Click / interact\n" +
+    "Grip — Reset view",
+    "Press any button to dismiss"
+  );
+}
+
+export function isGuidedPromptVisible(): boolean {
+  return promptMesh?.isEnabled() ?? false;
+}
+
 function attachToViewer(mesh: Mesh): void {
   const xrCamera = getXR()?.baseExperience.camera;
   if (xrCamera) {

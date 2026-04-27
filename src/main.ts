@@ -61,7 +61,15 @@ import {
   shouldAllowScriptedAction,
   handleScriptedAction,
 } from "./flow/scriptedDemo";
-import { initGuidedPrompt, reparentGuidedPromptToXR } from "./ui/guidedPrompt";
+import {
+  initGuidedPrompt,
+  reparentGuidedPromptToXR,
+  showGuidedPrompt,
+  hideGuidedPrompt,
+  showHelpCard,
+  isGuidedPromptVisible,
+} from "./ui/guidedPrompt";
+import { onLongPress } from "./interactions/xrSetup";
 
 async function main() {
   const canvas = document.getElementById("renderCanvas") as HTMLCanvasElement;
@@ -321,36 +329,134 @@ async function main() {
     }
   });
 
+  // ── Guided tutorial state ──────────────────────────────
+  let tutorialStep = -1; // -1 = not active, 0+ = current step
+  const tutorialSteps = [
+    {
+      title: "33kV Indian Queens Switchgear",
+      body: "Welcome to the ENSPEC Panos control panel.\n\nThis is a real 33kV switchgear assembly used at the Indian Queens site (NGET). Let's learn the controls.",
+      footer: "Press A to begin",
+      expect: "move_closer" as XRButtonAction,
+    },
+    {
+      title: "Move Closer",
+      body: "You just moved closer to the panel.\n\nUse A to step closer and B to step back. Try pressing B now.",
+      footer: "Press B to step back",
+      expect: "move_back" as XRButtonAction,
+    },
+    {
+      title: "Reveal The Interior",
+      body: "Now let's see inside the panel.\n\nPress X to fade away the outer shell and reveal the internal components.",
+      footer: "Press X on the left controller",
+      expect: "toggle_interior" as XRButtonAction,
+    },
+    {
+      title: "Exploded View",
+      body: "Now spread the components apart.\n\nPress Y to explode the view — each assembly slides out so you can inspect it individually.",
+      footer: "Press Y on the left controller",
+      expect: "toggle_explode" as XRButtonAction,
+    },
+    {
+      title: "You're Ready!",
+      body: "Point at the glowing dots and click to inspect each part.\n\nUse the right stick to walk around and the left stick to spin the model.\n\nHold any button for 3 seconds to see controls again.",
+      footer: "Press any button to explore freely",
+      expect: null,
+    },
+  ];
+
+  function showTutorialStep(): void {
+    if (tutorialStep < 0 || tutorialStep >= tutorialSteps.length) return;
+    const step = tutorialSteps[tutorialStep];
+    showGuidedPrompt(step.title, step.body, step.footer);
+  }
+
+  function advanceTutorial(action: XRButtonAction): boolean {
+    if (tutorialStep < 0) return false;
+    if (tutorialStep >= tutorialSteps.length) return false;
+
+    const step = tutorialSteps[tutorialStep];
+
+    // Last step — any button dismisses
+    if (step.expect === null) {
+      tutorialStep = -1;
+      hideGuidedPrompt();
+      return true;
+    }
+
+    // Check if the action matches what we expect
+    if (action === step.expect) {
+      tutorialStep++;
+      if (tutorialStep >= tutorialSteps.length) {
+        // Show final card
+        tutorialStep = tutorialSteps.length - 1;
+        showTutorialStep();
+      } else {
+        showTutorialStep();
+      }
+      return false; // let the action execute too
+    }
+
+    return false;
+  }
+
   onVRStateChanged.add((inVR) => {
     if (inVR) {
-      // Re-parent UI elements that were created before XR was ready
       reparentGuidedPromptToXR();
-
-      // Skip onboarding in VR — go straight to interactive mode.
-      // The user sees the model + menu immediately and can start clicking.
       showMenu();
-      console.log("VR entered — menu shown, ready for interaction.");
+
+      // Start guided tutorial
+      tutorialStep = 0;
+      showTutorialStep();
+      console.log("VR entered — tutorial started.");
     } else {
       stopScriptedDemo();
       hideHotspots();
       closeInfoPanel();
+      hideGuidedPrompt();
+      tutorialStep = -1;
       inspectActive = false;
+    }
+  });
+
+  // ── Long press: show help card ────────────────────────
+  onLongPress.add(() => {
+    if (isGuidedPromptVisible()) {
+      hideGuidedPrompt();
+    } else {
+      showHelpCard();
     }
   });
 
   onXRButtonAction.add((action) => {
     console.log(`XR button action received: ${action}`);
     if (isOnboardingActive()) return;
+
+    // If help card is showing, any button dismisses it
+    if (tutorialStep < 0 && isGuidedPromptVisible()) {
+      hideGuidedPrompt();
+      return;
+    }
+
+    // If tutorial is active, check if action advances it
+    advanceTutorial(action);
+
+    // Always execute the action (even during tutorial)
     void handleXRAction(action);
   });
 
   // ── Joystick controls ────────────────────────────────────
   // Left stick:  rotate model (turntable)
-  // Right stick: move user forward/backward (walk into model)
+  // Right stick: move user in all directions (walk into model)
   const modelRoot = modelInfo?.meshes[0] ?? null;
-  const modelCenterPoint = modelInfo?.center ?? new Vector3(0, 1.25, 0);
-  const ROTATE_SPEED = 0.03;   // radians per frame at full tilt
-  const MOVE_SPEED = 0.04;     // meters per frame at full tilt
+  const ROTATE_SPEED = 0.035;  // radians per frame at full tilt
+  const MOVE_SPEED = 0.05;    // meters per frame at full tilt
+
+  // GLB models load with rotationQuaternion set, which overrides .rotation.
+  // Clear it so we can use Euler angles for the turntable spin.
+  if (modelRoot) {
+    modelRoot.rotationQuaternion = null;
+    console.log("Model root rotationQuaternion cleared — Euler rotation enabled.");
+  }
 
   onJoystickAxes.add((axes) => {
     if (!isInVR()) return;
@@ -359,25 +465,30 @@ async function main() {
     if (modelRoot && (axes.leftX || axes.leftY)) {
       // X axis = rotate around Y (turntable left/right)
       modelRoot.rotation.y += axes.leftX * ROTATE_SPEED;
-      // Y axis = tilt around X (look up/down) — clamped
-      modelRoot.rotation.x += axes.leftY * ROTATE_SPEED * 0.5;
-      modelRoot.rotation.x = clampAngle(modelRoot.rotation.x, -0.5, 0.5);
+      // Y axis = tilt around X (look up/down) — clamped so it doesn't flip
+      modelRoot.rotation.x += axes.leftY * ROTATE_SPEED * 0.6;
+      modelRoot.rotation.x = clampAngle(modelRoot.rotation.x, -0.6, 0.6);
     }
 
-    // ── Right stick: move user forward/backward ─────────
-    if (axes.rightY) {
+    // ── Right stick: move user in all directions ────────
+    if (axes.rightX || axes.rightY) {
       const xr = getXR();
       if (!xr) return;
 
       const xrCamera = xr.baseExperience.camera;
-      // Get the direction the user is looking (horizontal only)
+
+      // Forward/backward along gaze direction
       const forward = xrCamera.getDirection(Vector3.Forward());
       forward.y = 0;
       forward.normalize();
 
-      // Push stick forward (negative Y) = move toward model
-      // Pull stick back (positive Y) = move away
-      const move = forward.scale(-axes.rightY * MOVE_SPEED);
+      // Left/right strafe (perpendicular to gaze)
+      const right = xrCamera.getDirection(Vector3.Right());
+      right.y = 0;
+      right.normalize();
+
+      const move = forward.scale(-axes.rightY * MOVE_SPEED)
+        .add(right.scale(axes.rightX * MOVE_SPEED));
       xrCamera.position.addInPlace(move);
     }
   });

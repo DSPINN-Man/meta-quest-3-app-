@@ -39,6 +39,13 @@ export const onXRInput = new Observable<void>();
 export const onVRStateChanged = new Observable<boolean>();
 export const onXRButtonAction = new Observable<XRButtonAction>();
 
+/** Fires when ANY button is held for 3+ seconds */
+export const onLongPress = new Observable<void>();
+
+/** Track button hold times for long-press detection */
+const buttonHoldTimers = new Map<string, number>();
+const LONG_PRESS_MS = 3000;
+
 /** Per-frame joystick axes: { leftX, leftY, rightX, rightY } all -1 to 1 */
 export interface JoystickAxes {
   leftX: number;
@@ -211,8 +218,27 @@ function setupTrackedControllers(
       motionController.getComponentIds().forEach((componentId) => {
         const component = motionController.getComponent(componentId);
         if (!component) return;
+        const holdKey = `${controller.inputSource.handedness}:${componentId}`;
 
         component.onButtonStateChangedObservable.add(() => {
+          const isPressed = component.pressed;
+
+          if (isPressed && !buttonHoldTimers.has(holdKey)) {
+            // Button just pressed — start hold timer
+            const timer = window.setTimeout(() => {
+              console.log(`Long press detected: ${holdKey}`);
+              onLongPress.notifyObservers();
+              buttonHoldTimers.delete(holdKey);
+            }, LONG_PRESS_MS);
+            buttonHoldTimers.set(holdKey, timer);
+          }
+
+          if (!isPressed && buttonHoldTimers.has(holdKey)) {
+            // Button released before long-press — cancel timer and fire short press
+            window.clearTimeout(buttonHoldTimers.get(holdKey)!);
+            buttonHoldTimers.delete(holdKey);
+          }
+
           const becamePressed = component.changes.pressed?.current === true;
           if (!becamePressed) return;
 
@@ -224,10 +250,6 @@ function setupTrackedControllers(
               `XR motion action: ${controller.inputSource.handedness} ${componentId} -> ${action}`
             );
             onXRButtonAction.notifyObservers(action);
-          } else {
-            console.log(
-              `XR motion input: ${controller.inputSource.handedness} ${componentId}`
-            );
           }
         });
       });
@@ -278,7 +300,8 @@ function pollQuestButtons(): void {
 
 /**
  * Read joystick axes every frame and fire the observable.
- * Quest Touch controllers: axes[2] = thumbstick X, axes[3] = thumbstick Y.
+ * Quest Touch controllers report thumbstick on axes[2,3] OR axes[0,1]
+ * depending on firmware/profile — we check both and use whichever has values.
  */
 function pollJoystickAxes(): void {
   if (!vrActive) return;
@@ -291,9 +314,19 @@ function pollJoystickAxes(): void {
     if (!gamepad?.axes) continue;
 
     const hand = tracked.source.inputSource.handedness;
-    // Quest thumbstick axes: index 2 = X, index 3 = Y
-    const x = gamepad.axes.length > 2 ? gamepad.axes[2] : 0;
-    const y = gamepad.axes.length > 3 ? gamepad.axes[3] : 0;
+
+    // Try axes[2,3] first (standard WebXR), fall back to axes[0,1]
+    let x = 0;
+    let y = 0;
+    if (gamepad.axes.length > 2) {
+      x = gamepad.axes[2];
+      y = gamepad.axes[3] ?? 0;
+    }
+    // If axes[2,3] are zero, try axes[0,1]
+    if (Math.abs(x) < DEADZONE && Math.abs(y) < DEADZONE && gamepad.axes.length >= 2) {
+      x = gamepad.axes[0];
+      y = gamepad.axes[1];
+    }
 
     const ax = Math.abs(x) > DEADZONE ? x : 0;
     const ay = Math.abs(y) > DEADZONE ? y : 0;
@@ -307,7 +340,6 @@ function pollJoystickAxes(): void {
     }
   }
 
-  // Only fire if any stick is active (saves overhead when idle)
   if (axes.leftX || axes.leftY || axes.rightX || axes.rightY) {
     onJoystickAxes.notifyObservers(axes);
   }

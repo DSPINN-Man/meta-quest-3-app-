@@ -87,6 +87,8 @@ export interface HotspotData {
   meshName: string;
   title: string;
   description: string;
+  /** Extra Y offset in meters (use for hotspots on hidden/underground meshes) */
+  yBoost?: number;
 }
 
 export const HOTSPOTS: HotspotData[] = [
@@ -124,6 +126,7 @@ export const HOTSPOTS: HotspotData[] = [
     title: "Cable Entry Boxes",
     description:
       "Sealed cable entry points with gland plates. Provides IP-rated cable management for incoming and outgoing power feeds.",
+    yBoost: 0.4,
   },
 ];
 
