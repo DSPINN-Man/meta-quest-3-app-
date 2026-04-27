@@ -18,6 +18,9 @@ import {
   resetGuidedView,
   onXRButtonAction,
   onVRStateChanged,
+  onJoystickAxes,
+  isInVR,
+  getXR,
   type XRButtonAction,
 } from "./interactions/xrSetup";
 import {
@@ -44,7 +47,7 @@ import {
   showHotspots,
   hideHotspots,
 } from "./interactions/hotspots";
-import { createFloatingMenu, onMenuButton } from "./ui/floatingMenu";
+import { createFloatingMenu, onMenuButton, showMenu } from "./ui/floatingMenu";
 import { showInfoPanel, closeInfoPanel } from "./ui/infoPanel";
 import {
   initOnboarding,
@@ -121,9 +124,9 @@ async function main() {
     camera.lowerRadiusLimit = Math.max(h, w) * 0.3;
     camera.upperRadiusLimit = Math.max(h, w) * 8;
 
-    const farDist = Math.max(w * 2.6, 3.4);
-    const midDist = Math.max(w * 2.1, 2.6);
-    const closeDist = Math.max(w * 1.55, 1.9);
+    const farDist = Math.max(w * 3.0, 4.0);
+    const midDist = Math.max(w * 2.0, 2.8);
+    const closeDist = Math.max(w * 1.2, 1.5);
     configureGuidedViewpoints(
       [
         new Vector3(modelInfo.center.x, 1.6, modelInfo.center.z - farDist),
@@ -255,20 +258,17 @@ async function main() {
   }
 
   async function handleXRAction(action: XRButtonAction) {
+    console.log(`handleXRAction: ${action}`);
+
+    // B button while inspecting a hotspot: close the card and step back
     if (inspectActive && action === "move_back") {
       inspectActive = false;
       closeInfoPanel();
-      stepGuidedView(-1);
       return;
     }
 
-    if (!shouldAllowScriptedAction(action)) {
-      handleScriptedAction(action);
-      return;
-    }
-
+    // Run the action directly — no scripted demo gating.
     await runMappedAction(action);
-    handleScriptedAction(action);
   }
 
   createFloatingMenu(scene, modelInfo ?? undefined);
@@ -325,7 +325,11 @@ async function main() {
     if (inVR) {
       // Re-parent UI elements that were created before XR was ready
       reparentGuidedPromptToXR();
-      void runOnboarding();
+
+      // Skip onboarding in VR — go straight to interactive mode.
+      // The user sees the model + menu immediately and can start clicking.
+      showMenu();
+      console.log("VR entered — menu shown, ready for interaction.");
     } else {
       stopScriptedDemo();
       hideHotspots();
@@ -335,8 +339,47 @@ async function main() {
   });
 
   onXRButtonAction.add((action) => {
+    console.log(`XR button action received: ${action}`);
     if (isOnboardingActive()) return;
     void handleXRAction(action);
+  });
+
+  // ── Joystick controls ────────────────────────────────────
+  // Left stick:  rotate model (turntable)
+  // Right stick: move user forward/backward (walk into model)
+  const modelRoot = modelInfo?.meshes[0] ?? null;
+  const modelCenterPoint = modelInfo?.center ?? new Vector3(0, 1.25, 0);
+  const ROTATE_SPEED = 0.03;   // radians per frame at full tilt
+  const MOVE_SPEED = 0.04;     // meters per frame at full tilt
+
+  onJoystickAxes.add((axes) => {
+    if (!isInVR()) return;
+
+    // ── Left stick: spin the model ──────────────────────
+    if (modelRoot && (axes.leftX || axes.leftY)) {
+      // X axis = rotate around Y (turntable left/right)
+      modelRoot.rotation.y += axes.leftX * ROTATE_SPEED;
+      // Y axis = tilt around X (look up/down) — clamped
+      modelRoot.rotation.x += axes.leftY * ROTATE_SPEED * 0.5;
+      modelRoot.rotation.x = clampAngle(modelRoot.rotation.x, -0.5, 0.5);
+    }
+
+    // ── Right stick: move user forward/backward ─────────
+    if (axes.rightY) {
+      const xr = getXR();
+      if (!xr) return;
+
+      const xrCamera = xr.baseExperience.camera;
+      // Get the direction the user is looking (horizontal only)
+      const forward = xrCamera.getDirection(Vector3.Forward());
+      forward.y = 0;
+      forward.normalize();
+
+      // Push stick forward (negative Y) = move toward model
+      // Pull stick back (positive Y) = move away
+      const move = forward.scale(-axes.rightY * MOVE_SPEED);
+      xrCamera.position.addInPlace(move);
+    }
   });
 
   window.addEventListener("keydown", (e) => {
@@ -373,6 +416,10 @@ async function main() {
   window.addEventListener("resize", () => {
     engine.resize();
   });
+}
+
+function clampAngle(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
 }
 
 function computeInspectPosition(

@@ -128,8 +128,8 @@ export const HOTSPOTS: HotspotData[] = [
 ];
 
 export const HOTSPOT_STYLE = {
-  radiusRatio: 0.025,
-  stemLengthRatio: 0.06,
+  radiusRatio: 0.045,
+  stemLengthRatio: 0.08,
   /** ENSPEC Teal accent (#50c0af) */
   color: new Color3(0.314, 0.753, 0.686),
   alpha: 0.6,

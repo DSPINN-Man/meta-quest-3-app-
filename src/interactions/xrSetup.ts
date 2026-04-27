@@ -39,6 +39,17 @@ export const onXRInput = new Observable<void>();
 export const onVRStateChanged = new Observable<boolean>();
 export const onXRButtonAction = new Observable<XRButtonAction>();
 
+/** Per-frame joystick axes: { leftX, leftY, rightX, rightY } all -1 to 1 */
+export interface JoystickAxes {
+  leftX: number;
+  leftY: number;
+  rightX: number;
+  rightY: number;
+}
+
+/** Fires every frame with current joystick positions */
+export const onJoystickAxes = new Observable<JoystickAxes>();
+
 export function isInVR(): boolean {
   return vrActive;
 }
@@ -147,34 +158,31 @@ export async function setupXR(
 
     xrExperience = xr;
 
+    // Verify pointer selection is active — this is what makes
+    // trigger clicks fire OnPickTrigger on menu buttons / hotspots.
+    if (xr.pointerSelection) {
+      console.log("WebXR pointer selection: ACTIVE — trigger clicks will fire pick events.");
+    } else {
+      console.error("WebXR pointer selection: NOT AVAILABLE — buttons won't work!");
+    }
+
     xr.baseExperience.onStateChangedObservable.add((state) => {
       vrActive = state === WebXRState.IN_XR;
       onVRStateChanged.notifyObservers(vrActive);
 
       if (vrActive) {
         applyCurrentGuidedView();
+        console.log("VR session active. Pointer selection enabled:", !!xr.pointerSelection);
       }
     });
 
-    try {
-      const featuresManager = xr.baseExperience.featuresManager;
-      featuresManager.enableFeature("xr-controller-movement", "latest", {
-        xrInput: xr.input,
-        movementEnabled: false,
-        rotationEnabled: false,
-        movementOrientationFollowsViewerPose: true,
-        movementOrientationFollowsController: false,
-        movementSpeed: 0,
-        rotationSpeed: 0,
-      });
-    } catch (err) {
-      console.log("Movement feature setup note:", err);
-    }
+    // NOTE: Removed xr-controller-movement feature — it was conflicting
+    // with pointer selection on some Quest firmware versions.
 
     setupTrackedControllers(xr.input, scene);
 
     console.log(
-      "WebXR immersive-vr ready. Quest button polling and guided viewpoints active."
+      "WebXR immersive-vr ready. Pointer selection + button mapping active."
     );
     return xr;
   } catch (err) {
@@ -233,6 +241,7 @@ function setupTrackedControllers(
   if (!pollObserver) {
     pollObserver = scene.onBeforeRenderObservable.add(() => {
       pollQuestButtons();
+      pollJoystickAxes();
     });
   }
 }
@@ -264,6 +273,43 @@ function pollQuestButtons(): void {
         tracked.pressedButtons.delete(index);
       }
     }
+  }
+}
+
+/**
+ * Read joystick axes every frame and fire the observable.
+ * Quest Touch controllers: axes[2] = thumbstick X, axes[3] = thumbstick Y.
+ */
+function pollJoystickAxes(): void {
+  if (!vrActive) return;
+
+  const axes: JoystickAxes = { leftX: 0, leftY: 0, rightX: 0, rightY: 0 };
+  const DEADZONE = 0.12;
+
+  for (const tracked of trackedControllers.values()) {
+    const gamepad = tracked.source.inputSource.gamepad;
+    if (!gamepad?.axes) continue;
+
+    const hand = tracked.source.inputSource.handedness;
+    // Quest thumbstick axes: index 2 = X, index 3 = Y
+    const x = gamepad.axes.length > 2 ? gamepad.axes[2] : 0;
+    const y = gamepad.axes.length > 3 ? gamepad.axes[3] : 0;
+
+    const ax = Math.abs(x) > DEADZONE ? x : 0;
+    const ay = Math.abs(y) > DEADZONE ? y : 0;
+
+    if (hand === "left") {
+      axes.leftX = ax;
+      axes.leftY = ay;
+    } else if (hand === "right") {
+      axes.rightX = ax;
+      axes.rightY = ay;
+    }
+  }
+
+  // Only fire if any stick is active (saves overhead when idle)
+  if (axes.leftX || axes.leftY || axes.rightX || axes.rightY) {
+    onJoystickAxes.notifyObservers(axes);
   }
 }
 
