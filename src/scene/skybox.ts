@@ -4,6 +4,7 @@ import {
   StandardMaterial,
   Texture,
   Color3,
+  Color4,
   Mesh,
 } from "@babylonjs/core";
 import { SKYBOX_OPTIONS, type SkyboxOption } from "../utils/config";
@@ -100,6 +101,13 @@ export function setSkybox(scene: Scene, optionId: string): void {
         skyboxMat.emissiveTexture = texture;
         skyboxMat.emissiveColor = Color3.White();
         skyboxMesh.setEnabled(true);
+        // Force the scene clear colour to black so any sliver of view not
+        // covered by the sphere doesn't read as the original ENSPEC blue.
+        scene.clearColor = new Color4(0, 0, 0, 1);
+        // Recolour the floor to match — otherwise the lower half of the
+        // view stays bright ENSPEC blue and visitors don't see the
+        // background change at all.
+        applyGroundColor(scene, option.groundColor);
         console.log(`Skybox: "${option.label}" loaded from ${texturePath}`);
       },
       () => {
@@ -123,8 +131,27 @@ export function setSkybox(scene: Scene, optionId: string): void {
 }
 
 /**
+ * Repaint the ground mesh's diffuse colour. The ground is created in
+ * environment.ts with name "ground" (XR.teleportFloorMeshName). We look
+ * it up by name to avoid threading a reference through every call site.
+ */
+function applyGroundColor(scene: Scene, color: Color3): void {
+  const ground = scene.getMeshByName("ground");
+  if (!ground) return;
+  const mat = ground.material;
+  if (mat instanceof StandardMaterial) {
+    mat.diffuseColor = color.clone();
+    // Keep the existing ambient contribution but darken slightly so the
+    // floor doesn't glow brighter than the sky behind it.
+    mat.emissiveColor = color.scale(0.05);
+  }
+}
+
+/**
  * Apply the option's procedural fallback colour as the scene clear colour
- * and hide the skybox sphere.
+ * and hide the skybox sphere. Also recolour the floor so the user sees
+ * the ground change — otherwise the lower half of the view sticks at
+ * the previous skybox's floor.
  */
 function applyFallbackColor(scene: Scene, option: SkyboxOption): void {
   if (skyboxMesh) {
@@ -135,6 +162,7 @@ function applyFallbackColor(scene: Scene, option: SkyboxOption): void {
     }
   }
   scene.clearColor = option.fallbackColor.clone();
+  applyGroundColor(scene, option.groundColor);
   console.log(
     `Skybox: "${option.label}" — procedural colour fallback applied.`
   );

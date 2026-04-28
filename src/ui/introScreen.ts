@@ -97,8 +97,16 @@ function showDesktopIntro(): void {
       clearTimeout(stallCheck);
     })
     .catch(() => {
-      videoEl!.muted = true;
-      videoEl!.play()
+      // Autoplay was blocked. Try a muted retry — but first confirm the
+      // element is still around. If the error/stall handler beat us here,
+      // videoEl will be null and the retry must abort cleanly.
+      const v = videoEl;
+      if (!v) {
+        clearTimeout(stallCheck);
+        return;
+      }
+      v.muted = true;
+      v.play()
         .then(() => clearTimeout(stallCheck))
         .catch(() => {
           clearTimeout(stallCheck);

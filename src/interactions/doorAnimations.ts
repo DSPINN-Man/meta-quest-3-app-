@@ -233,12 +233,20 @@ export async function fadeExterior(scene: Scene): Promise<void> {
   // Keep frame_structure as an ultra-faint ghost outline so the exploded
   // parts have spatial context — the user still sees the cabinet
   // silhouette they came from. Hide everything else for performance.
-  const frameMesh = fadeMeshes.find(
-    (m) => m.name.toLowerCase() === DOORS.frameName.toLowerCase()
+  //
+  // v4 GLB splits frame_structure into _primitive0..7, so we match by
+  // prefix rather than exact name. All primitives that belong to the
+  // frame stay as a 0.06-alpha ghost; everything else fully disables.
+  const framePrefix = DOORS.frameName.toLowerCase();
+  const frameMeshes = new Set<AbstractMesh>(
+    fadeMeshes.filter((m) => {
+      const n = m.name.toLowerCase();
+      return n === framePrefix || n.startsWith(framePrefix + "_") || n.startsWith(framePrefix + ".");
+    })
   );
   const allFadeable = [...fadeMeshes, ...swingMeshes];
   for (const mesh of allFadeable) {
-    if (mesh === frameMesh) {
+    if (frameMeshes.has(mesh)) {
       setMeshAlpha(mesh, 0.06);
       mesh.setEnabled(true);
     } else {

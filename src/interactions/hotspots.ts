@@ -81,13 +81,37 @@ export function createHotspots(scene: Scene, modelInfo?: ModelInfo): void {
   console.log("Creating hotspots...");
 
   for (const hotspot of HOTSPOTS) {
-    const targetMesh = loadedMeshes.find(
-      (m) => m.name.toLowerCase() === hotspot.meshName.toLowerCase()
-    );
+    // The v4 GLB splits each Blender object into per-material primitives:
+    // capacitor_bank → capacitor_bank_primitive0 / _primitive1, etc.
+    // Match by *prefix* and anchor the marker to whichever primitive has
+    // the most vertices (i.e. the "main" body of that subsystem).
+    const wanted = hotspot.meshName.toLowerCase();
+    const candidates = loadedMeshes.filter((m) => {
+      const n = m.name.toLowerCase();
+      return n === wanted || n.startsWith(wanted + "_") || n.startsWith(wanted + ".");
+    });
+
+    let targetMesh = candidates[0] ?? null;
+    if (candidates.length > 1) {
+      // Pick the largest — usually the dominant-geometry primitive.
+      let bestVerts = -1;
+      for (const c of candidates) {
+        const verts = c.getTotalVertices();
+        if (verts > bestVerts) {
+          bestVerts = verts;
+          targetMesh = c;
+        }
+      }
+    }
 
     if (!targetMesh) {
       console.warn(`  Hotspot "${hotspot.id}": mesh "${hotspot.meshName}" NOT FOUND — skipping`);
       continue;
+    }
+    if (candidates.length > 1) {
+      console.log(
+        `  Hotspot "${hotspot.id}": "${hotspot.meshName}" → ${candidates.length} primitives, anchored to "${targetMesh.name}" (${targetMesh.getTotalVertices().toLocaleString()} verts)`
+      );
     }
 
     targetMesh.computeWorldMatrix(true);

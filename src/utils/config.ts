@@ -201,18 +201,53 @@ export interface SkyboxOption {
    * crash the scene.
    */
   fallbackColor: Color4;
+  /**
+   * Ground-plane diffuse colour to apply with this skybox. Without this the
+   * ENSPEC light blue floor stays visible no matter which skybox is chosen,
+   * which was confusing visitors ("background stays the same"). Each option
+   * gets a ground colour that reads as continuous with its sky.
+   */
+  groundColor: Color3;
 }
 
 // TODO: drop real equirectangular photos at the paths below to upgrade these
 // scenes from procedural colour to true 360° backgrounds. Until then, each
 // option uses its `fallbackColor` as a flat scene clear colour.
+//
+// groundColor is applied to the floor mesh whenever the option is selected
+// so the lower half of the view changes too — otherwise the ENSPEC blue
+// floor would stay visible no matter what the user picked.
 export const SKYBOX_OPTIONS: SkyboxOption[] = [
-  // Existing default — keep ENSPEC light blue clear colour
-  { id: "dark_studio", label: "Dark Studio", file: null, fallbackColor: new Color4(0.349, 0.761, 0.843, 1) },
+  // Existing default — keep ENSPEC light blue everywhere
+  {
+    id: "dark_studio",
+    label: "Dark Studio",
+    file: null,
+    fallbackColor: new Color4(0.349, 0.761, 0.843, 1),
+    groundColor: new Color3(0.349, 0.761, 0.843),
+  },
   // TODO: replace with public/textures/skybox_industrial.jpg
-  { id: "industrial", label: "Industrial Facility", file: "skybox_industrial.jpg", fallbackColor: new Color4(0.102, 0.082, 0.071, 1) }, // #1a1512 dark warm grey
+  {
+    id: "industrial",
+    label: "Industrial Facility",
+    file: "skybox_industrial.jpg",
+    fallbackColor: new Color4(0.102, 0.082, 0.071, 1), // #1a1512 dark warm grey
+    groundColor: new Color3(0.18, 0.16, 0.14),         // matching warm concrete
+  },
   // TODO: replace with public/textures/skybox_showroom.jpg
-  { id: "showroom", label: "Concrete Pavement", file: "skybox_showroom.jpg", fallbackColor: new Color4(0.133, 0.141, 0.149, 1) }, // #222426 medium neutral grey
+  {
+    id: "showroom",
+    label: "Concrete Pavement",
+    file: "skybox_showroom.jpg",
+    fallbackColor: new Color4(0.133, 0.141, 0.149, 1), // #222426 medium neutral grey
+    groundColor: new Color3(0.32, 0.33, 0.34),         // pale poured concrete
+  },
   // TODO: replace with public/textures/skybox_site.jpg
-  { id: "site", label: "Indian Queens Site", file: "skybox_site.jpg", fallbackColor: new Color4(0.067, 0.094, 0.125, 1) }, // #111820 deep blue-grey
+  {
+    id: "site",
+    label: "Indian Queens Site",
+    file: "skybox_site.jpg",
+    fallbackColor: new Color4(0.067, 0.094, 0.125, 1), // #111820 deep blue-grey
+    groundColor: new Color3(0.18, 0.20, 0.16),         // damp Cornish dirt / asphalt mix
+  },
 ];
