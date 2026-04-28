@@ -44,7 +44,7 @@ export const LIGHTS = {
 // Model
 export const MODEL = {
   path: "models/",
-  fileName: "panel_optimized_v3.glb",
+  fileName: "panel_optimized_v4.glb",
   targetHeight: 2.5,
   position: new Vector3(0, 0, 0),
 };
