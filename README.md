@@ -2,6 +2,27 @@
 
 Immersive Meta Quest 3 experience for showcasing the Panos control panel at the All Energy conference. Built with Babylon.js + WebXR.
 
+## Conference Quick Start
+
+Three steps. No terminal required.
+
+1. Double-click **`START_CONFERENCE.bat`** on the booth laptop.
+2. On the Quest 3 browser, go to `http://<laptop-ip>:8080` (the bat script prints the exact URL).
+3. Tap **Enter VR**.
+
+Requirement: the laptop and the Quest 3 must be on the **same WiFi network**.
+
+When the conference is over, double-click **`STOP_CONFERENCE.bat`** to shut down the server cleanly.
+
+If `dist/` is missing (first time on a new machine), open a terminal in this folder and run:
+
+```bash
+npm install
+npm run build
+```
+
+then double-click `START_CONFERENCE.bat`.
+
 ## Quick Setup
 
 ### Prerequisites

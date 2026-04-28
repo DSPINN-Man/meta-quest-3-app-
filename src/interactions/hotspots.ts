@@ -108,12 +108,15 @@ export function createHotspots(scene: Scene, modelInfo?: ModelInfo): void {
     sphere.receiveShadows = false;
     sphere.isPickable = true;
 
-    // ── Border ring — bright outline for visibility ───────────
+    // ── Border ring — bright cyan outline for visibility ──────
+    // Thickness bumped (0.20 → 0.45) and colour switched from white to
+    // cyan so the markers pop against the panel and the various skybox
+    // backgrounds.
     const ring = MeshBuilder.CreateTorus(
       `ring_${hotspot.id}`,
       {
         diameter: sphereRadius * 2.8,
-        thickness: sphereRadius * 0.2,
+        thickness: sphereRadius * 0.45,
         tessellation: 24,
       },
       scene
@@ -121,7 +124,7 @@ export function createHotspots(scene: Scene, modelInfo?: ModelInfo): void {
     ring.position = pos.clone();
     ring.rotation.x = Math.PI / 2; // lay flat around sphere
     const ringMat = new StandardMaterial(`ringMat_${hotspot.id}`, scene);
-    ringMat.emissiveColor = new Color3(1, 1, 1);
+    ringMat.emissiveColor = new Color3(0.4, 0.95, 1.0);
     ringMat.diffuseColor = Color3.Black();
     ringMat.specularColor = Color3.Black();
     ringMat.alpha = 0.7;
@@ -281,4 +284,50 @@ export function toggleHotspots(): void {
 /** Returns true if hotspot markers are currently visible. */
 export function areHotspotsVisible(): boolean {
   return visible;
+}
+
+/**
+ * One-shot attention pulse on every visible hotspot ring.
+ *
+ * Briefly scales the ring up and back down over ~700ms so the user sees
+ * "look, these glowing things are interactive". Used when the tutorial
+ * finishes — we want to draw the eye to the hotspots before the user
+ * starts free-exploring.
+ */
+export function pulseHotspotsOnce(): void {
+  if (markers.length === 0) return;
+  // Make sure rings are visible first — in case the caller forgot.
+  for (const m of markers) m.ring.setEnabled(true);
+
+  const duration = 700;
+  const peakScale = 1.6;
+  const startTime = performance.now();
+
+  // Capture base scales so we restore exactly to where they were.
+  const bases = markers.map((m) => m.ring.scaling.clone());
+
+  const tick = () => {
+    const elapsed = performance.now() - startTime;
+    const t = Math.min(elapsed / duration, 1);
+    // bell curve: 0 → 1 → 0
+    const bell = Math.sin(Math.PI * t);
+    const factor = 1 + (peakScale - 1) * bell;
+
+    for (let i = 0; i < markers.length; i++) {
+      const ring = markers[i].ring;
+      ring.scaling.x = bases[i].x * factor;
+      ring.scaling.y = bases[i].y * factor;
+      ring.scaling.z = bases[i].z * factor;
+    }
+
+    if (t < 1) {
+      requestAnimationFrame(tick);
+    } else {
+      // Restore base scales precisely.
+      for (let i = 0; i < markers.length; i++) {
+        markers[i].ring.scaling.copyFrom(bases[i]);
+      }
+    }
+  };
+  requestAnimationFrame(tick);
 }

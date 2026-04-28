@@ -126,20 +126,47 @@ export function hideGuidedPrompt(): void {
 export function showHelpCard(): void {
   showGuidedPrompt(
     "Controls",
-    "A — Move closer\n" +
-    "B — Step back / close info\n" +
-    "X — Reveal interior\n" +
-    "Y — Exploded view\n" +
-    "Right stick — Move around\n" +
-    "Left stick — Spin model\n" +
-    "Trigger — Click / interact\n" +
-    "Grip — Reset view",
+    "Left controller:   X = See Inside    Y = Explode\n" +
+    "Right controller:  A = Closer    B = Back    Grip = Reset\n" +
+    "Right stick = Walk around\n" +
+    "Left stick = Spin model\n" +
+    "Trigger = Click / interact\n" +
+    "Hold any button 3s = Show this card again",
     "Press any button to dismiss"
   );
 }
 
 export function isGuidedPromptVisible(): boolean {
   return promptMesh?.isEnabled() ?? false;
+}
+
+/**
+ * Briefly recolour the current prompt card to green and replace the title
+ * with a "✓ Got it!" confirmation. Auto-restores after ~800ms so the next
+ * step transitions cleanly afterwards.
+ *
+ * Intended for the guided tutorial: when the user presses the correct
+ * button, fire this *before* advancing to the next card so the user gets
+ * positive feedback that they did the right thing.
+ */
+export function showSuccessFeedback(message: string = "✓ Got it!"): void {
+  if (!promptMesh || !titleBlock) return;
+  if (!promptMesh.isEnabled()) return;
+
+  const originalTitle = titleBlock.text;
+  const originalTitleColor = titleBlock.color;
+
+  titleBlock.text = message;
+  titleBlock.color = "rgba(120, 240, 160, 1)";
+
+  setTimeout(() => {
+    // Only restore if our message is still visible — if a new step has
+    // already been rendered, leave it alone.
+    if (titleBlock && titleBlock.text === message) {
+      titleBlock.text = originalTitle;
+      titleBlock.color = originalTitleColor;
+    }
+  }, 800);
 }
 
 function attachToViewer(mesh: Mesh): void {

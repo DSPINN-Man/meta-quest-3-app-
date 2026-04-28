@@ -10,7 +10,16 @@ import { SKYBOX_OPTIONS, type SkyboxOption } from "../utils/config";
 
 /**
  * Skybox system — loads 360° equirectangular images as environment backgrounds.
- * Supports switching between environments at runtime.
+ *
+ * Every SKYBOX_OPTIONS entry has a `fallbackColor`. If the image file is null
+ * OR fails to load (e.g. file not yet provided), we silently fall back to that
+ * colour as the scene clear colour. This means the choice screen never crashes
+ * even before the real photos are dropped into public/textures/.
+ *
+ * TODO (conference): replace fallback colours with real equirectangular photos.
+ *   public/textures/skybox_industrial.jpg
+ *   public/textures/skybox_showroom.jpg
+ *   public/textures/skybox_site.jpg
  */
 
 let skyboxMesh: Mesh | null = null;
@@ -46,6 +55,10 @@ export function initSkybox(scene: Scene): void {
 /**
  * Switch the environment background.
  * Pass a skybox option ID from SKYBOX_OPTIONS.
+ *
+ * If the option has no file (or the file fails to load) we apply the option's
+ * fallback colour as the scene clear colour. This is the default for every
+ * option until real photos are dropped in.
  */
 export function setSkybox(scene: Scene, optionId: string): void {
   const option = SKYBOX_OPTIONS.find((o) => o.id === optionId);
@@ -56,38 +69,75 @@ export function setSkybox(scene: Scene, optionId: string): void {
 
   currentSkyboxId = optionId;
 
+  // No file specified → solid colour mode (procedural fallback only)
   if (!option.file) {
-    // Solid color mode — hide skybox, use scene clear color
-    if (skyboxMesh) skyboxMesh.setEnabled(false);
-    console.log(`Skybox: "${option.label}" (solid color)`);
+    applyFallbackColor(scene, option);
     return;
   }
 
   if (!skyboxMesh || !skyboxMat) {
-    console.warn("Skybox not initialized.");
+    console.warn("Skybox not initialized — using fallback colour.");
+    applyFallbackColor(scene, option);
     return;
   }
 
-  // Load the equirectangular texture
+  // Attempt to load the equirectangular texture. If it fails (file missing),
+  // fall back to the procedural colour so the scene never crashes.
   const texturePath = `textures/${option.file}`;
   try {
-    const texture = new Texture(texturePath, scene);
+    const texture = new Texture(
+      texturePath,
+      scene,
+      undefined, // noMipmap
+      undefined, // invertY
+      undefined, // samplingMode
+      () => {
+        // onLoad — apply texture to skybox sphere
+        if (!skyboxMesh || !skyboxMat) return;
+        if (skyboxMat.emissiveTexture && skyboxMat.emissiveTexture !== texture) {
+          skyboxMat.emissiveTexture.dispose();
+        }
+        skyboxMat.emissiveTexture = texture;
+        skyboxMat.emissiveColor = Color3.White();
+        skyboxMesh.setEnabled(true);
+        console.log(`Skybox: "${option.label}" loaded from ${texturePath}`);
+      },
+      () => {
+        // onError — file missing or failed to decode. Fall back to colour.
+        console.warn(
+          `Skybox texture "${texturePath}" not found — using fallback colour for "${option.label}".`
+        );
+        try {
+          texture.dispose();
+        } catch {
+          // ignore
+        }
+        applyFallbackColor(scene, option);
+      }
+    );
     texture.coordinatesMode = Texture.FIXED_EQUIRECTANGULAR_MIRRORED_MODE;
-
-    // Dispose old texture
-    if (skyboxMat.emissiveTexture) {
-      skyboxMat.emissiveTexture.dispose();
-    }
-
-    skyboxMat.emissiveTexture = texture;
-    skyboxMat.emissiveColor = Color3.White();
-    skyboxMesh.setEnabled(true);
-
-    console.log(`Skybox: "${option.label}" loaded from ${texturePath}`);
   } catch (err) {
-    console.warn(`Failed to load skybox texture: ${texturePath}`, err);
-    skyboxMesh.setEnabled(false);
+    console.warn(`Skybox load threw, using fallback colour: ${texturePath}`, err);
+    applyFallbackColor(scene, option);
   }
+}
+
+/**
+ * Apply the option's procedural fallback colour as the scene clear colour
+ * and hide the skybox sphere.
+ */
+function applyFallbackColor(scene: Scene, option: SkyboxOption): void {
+  if (skyboxMesh) {
+    skyboxMesh.setEnabled(false);
+    if (skyboxMat?.emissiveTexture) {
+      skyboxMat.emissiveTexture.dispose();
+      skyboxMat.emissiveTexture = null;
+    }
+  }
+  scene.clearColor = option.fallbackColor.clone();
+  console.log(
+    `Skybox: "${option.label}" — procedural colour fallback applied.`
+  );
 }
 
 /** Get the current skybox option ID */

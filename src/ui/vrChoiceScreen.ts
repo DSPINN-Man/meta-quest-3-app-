@@ -2,8 +2,6 @@ import {
   Scene,
   Mesh,
   MeshBuilder,
-  ActionManager,
-  ExecuteCodeAction,
 } from "@babylonjs/core";
 import {
   AdvancedDynamicTexture,
@@ -17,11 +15,13 @@ import { SKYBOX_OPTIONS } from "../utils/config";
 
 /**
  * VR choice screen — shown on VR enter before the experience begins.
- * User picks:
- *   1. Experience mode: Quick Tour or Full Experience
- *   2. Background environment
  *
- * Results are returned via a Promise so main.ts can act on the choices.
+ * Two sequential pickers:
+ *   1. Experience mode — Quick Tour or Full Experience
+ *   2. Background environment — one of SKYBOX_OPTIONS
+ *
+ * Resolves once both choices are made, so main.ts can branch on `mode`
+ * and apply `skyboxId` via setSkybox().
  */
 
 export interface VRChoices {
@@ -29,72 +29,99 @@ export interface VRChoices {
   skyboxId: string;
 }
 
-let choiceMeshes: Mesh[] = [];
+let activeMeshes: Mesh[] = [];
 
 export function showVRChoiceScreen(scene: Scene): Promise<VRChoices> {
   return new Promise((resolve) => {
     const choices: VRChoices = { mode: "full", skyboxId: "dark_studio" };
 
-    // ── Panel 1: Experience Mode ─────────────────────────
-    const modePanel = createChoicePanel(
-      scene,
-      "choiceMode",
-      { width: 1.6, height: 0.7 },
-      0.35,
-      -1.4
-    );
-
-    const modeTex = AdvancedDynamicTexture.CreateForMesh(modePanel, 800, 350);
-
-    const modeBg = createCardBg();
-    modeTex.addControl(modeBg);
-
-    const modeStack = new StackPanel("modeStack");
-    modeStack.isVertical = true;
-    modeStack.paddingTopInPixels = 24;
-    modeStack.paddingLeftInPixels = 36;
-    modeStack.paddingRightInPixels = 36;
-    modeBg.addControl(modeStack);
-
-    addText(modeStack, "Choose Your Experience", 30, "700", "rgba(255,255,255,0.95)", "40px");
-
-    // Quick Tour button
-    const quickBtn = createButtonRow(
-      scene, modePanel, modeTex, modeBg,
-      "quickTour",
-      "Quick Tour  (2 min)",
-      "Auto-guided highlights — sit back and watch",
-      0.18
-    );
-    quickBtn.onPickTrigger(() => {
-      choices.mode = "quick";
-      cleanup();
-      resolve(choices);
+    showModePicker(scene, (mode) => {
+      choices.mode = mode;
+      disposeActive();
+      showSkyboxPicker(scene, (skyboxId) => {
+        choices.skyboxId = skyboxId;
+        disposeActive();
+        resolve(choices);
+      });
     });
-
-    // Full Experience button
-    const fullBtn = createButtonRow(
-      scene, modePanel, modeTex, modeBg,
-      "fullExp",
-      "Full Experience",
-      "Free exploration with guided controls",
-      -0.08
-    );
-    fullBtn.onPickTrigger(() => {
-      choices.mode = "full";
-      cleanup();
-      resolve(choices);
-    });
-
-    choiceMeshes.push(modePanel);
-
-    function cleanup() {
-      for (const m of choiceMeshes) {
-        m.dispose();
-      }
-      choiceMeshes = [];
-    }
   });
+}
+
+// ── Step 1: Mode picker ─────────────────────────────────────────
+
+function showModePicker(
+  scene: Scene,
+  onPicked: (mode: "quick" | "full") => void
+): void {
+  const panel = createChoicePanel(scene, "choiceMode", { width: 1.6, height: 0.9 }, 0.0, -1.6);
+  const tex = AdvancedDynamicTexture.CreateForMesh(panel, 800, 450);
+
+  const bg = createCardBg();
+  tex.addControl(bg);
+
+  addTitle(bg, "Choose Your Experience");
+
+  // Two button rows, one above the other
+  createButtonRow(
+    bg,
+    "quickTour",
+    "Quick Tour  (2 min)",
+    "Auto-guided highlights — sit back and watch",
+    -50,
+    () => onPicked("quick")
+  );
+  createButtonRow(
+    bg,
+    "fullExp",
+    "Full Experience",
+    "Free exploration with guided controls",
+    50,
+    () => onPicked("full")
+  );
+
+  activeMeshes.push(panel);
+}
+
+// ── Step 2: Skybox picker ───────────────────────────────────────
+
+function showSkyboxPicker(scene: Scene, onPicked: (skyboxId: string) => void): void {
+  const count = SKYBOX_OPTIONS.length;
+  // Make the panel taller so all 4 options fit comfortably
+  const panel = createChoicePanel(scene, "choiceSkybox", { width: 1.7, height: 1.1 }, 0.0, -1.6);
+  const tex = AdvancedDynamicTexture.CreateForMesh(panel, 850, 550);
+
+  const bg = createCardBg();
+  tex.addControl(bg);
+
+  addTitle(bg, "Choose The Environment");
+
+  // Distribute the rows below the title.
+  const rowSpacing = 88;
+  const startY = -((count - 1) / 2) * rowSpacing + 30;
+
+  for (let i = 0; i < count; i++) {
+    const opt = SKYBOX_OPTIONS[i];
+    const subtitle = opt.file ? "Photographic 360° backdrop" : "Solid studio backdrop";
+    createButtonRow(
+      bg,
+      `sky_${opt.id}`,
+      opt.label,
+      subtitle,
+      startY + i * rowSpacing,
+      () => onPicked(opt.id)
+    );
+  }
+
+  activeMeshes.push(panel);
+}
+
+// ── Shared building blocks ──────────────────────────────────────
+
+function disposeActive(): void {
+  for (const m of activeMeshes) {
+    m.dispose();
+  }
+  activeMeshes = [];
 }
 
 function createChoicePanel(
@@ -134,47 +161,36 @@ function createCardBg(): Rectangle {
   return bg;
 }
 
-function addText(
-  parent: StackPanel,
-  text: string,
-  fontSize: number,
-  fontWeight: string,
-  color: string,
-  height: string
-): void {
-  const tb = new TextBlock("", text);
-  tb.color = color;
-  tb.fontSize = fontSize;
-  tb.fontWeight = fontWeight;
+function addTitle(parent: Rectangle, title: string): void {
+  const tb = new TextBlock("choiceTitle", title);
+  tb.color = "rgba(255,255,255,0.95)";
+  tb.fontSize = 30;
+  tb.fontWeight = "700";
   tb.fontFamily = "system-ui, -apple-system, 'SF Pro Display', sans-serif";
-  tb.height = height;
-  tb.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
+  tb.height = "60px";
+  tb.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
+  tb.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
+  tb.paddingTopInPixels = 24;
   parent.addControl(tb);
 }
 
-interface PickableButton {
-  onPickTrigger: (cb: () => void) => void;
-}
-
 function createButtonRow(
-  scene: Scene,
-  _parentMesh: Mesh,
-  _texture: AdvancedDynamicTexture,
   parentBg: Rectangle,
   id: string,
   label: string,
   subtitle: string,
-  yPos: number
-): PickableButton {
+  topPx: number,
+  onClick: () => void
+): void {
   const row = new Rectangle(`row_${id}`);
-  row.width = "90%";
-  row.height = "80px";
+  row.width = "88%";
+  row.height = "76px";
   row.cornerRadius = 16;
   row.thickness = 1;
   row.color = "rgba(100, 180, 220, 0.3)";
   row.background = "rgba(30, 40, 55, 0.6)";
   row.verticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
-  row.topInPixels = yPos * 350;
+  row.topInPixels = topPx;
   row.isPointerBlocker = true;
   parentBg.addControl(row);
 
@@ -189,7 +205,7 @@ function createButtonRow(
   row.addControl(labelTb);
 
   const subTb = new TextBlock(`sub_${id}`, subtitle);
-  subTb.color = "rgba(170, 180, 195, 0.65)";
+  subTb.color = "rgba(170, 180, 195, 0.7)";
   subTb.fontSize = 15;
   subTb.fontFamily = "system-ui, -apple-system, 'SF Pro Text', sans-serif";
   subTb.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
@@ -197,15 +213,17 @@ function createButtonRow(
   subTb.topInPixels = 16;
   row.addControl(subTb);
 
-  let callback: (() => void) | null = null;
-
-  row.onPointerClickObservable.add(() => {
-    if (callback) callback();
+  // Hover feedback so the user can tell their controller ray is on the row
+  row.onPointerEnterObservable.add(() => {
+    row.background = "rgba(45, 65, 90, 0.85)";
+    row.color = "rgba(120, 200, 240, 0.55)";
+  });
+  row.onPointerOutObservable.add(() => {
+    row.background = "rgba(30, 40, 55, 0.6)";
+    row.color = "rgba(100, 180, 220, 0.3)";
   });
 
-  return {
-    onPickTrigger: (cb: () => void) => {
-      callback = cb;
-    },
-  };
+  row.onPointerClickObservable.add(() => {
+    onClick();
+  });
 }

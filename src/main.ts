@@ -46,8 +46,15 @@ import {
   toggleHotspots,
   showHotspots,
   hideHotspots,
+  pulseHotspotsOnce,
 } from "./interactions/hotspots";
 import { createFloatingMenu, onMenuButton, showMenu } from "./ui/floatingMenu";
+import {
+  createPanicReset,
+  onPanicReset,
+  showPanicReset,
+  hidePanicReset,
+} from "./ui/panicReset";
 import { showInfoPanel, closeInfoPanel } from "./ui/infoPanel";
 import {
   initOnboarding,
@@ -68,6 +75,7 @@ import {
   hideGuidedPrompt,
   showHelpCard,
   isGuidedPromptVisible,
+  showSuccessFeedback,
 } from "./ui/guidedPrompt";
 import { onLongPress } from "./interactions/xrSetup";
 import { initSkybox, setSkybox } from "./scene/skybox";
@@ -286,6 +294,10 @@ async function main() {
   }
 
   createFloatingMenu(scene, modelInfo ?? undefined);
+  createPanicReset(scene, modelInfo ?? undefined);
+  onPanicReset(() => {
+    void handleXRAction("reset_view");
+  });
   onMenuButton((id) => {
     switch (id) {
       case "move_closer":
@@ -350,10 +362,16 @@ async function main() {
 
   // ── Guided tutorial state ──────────────────────────────
   let tutorialStep = -1; // -1 = not active, 0+ = current step
+  let finalCardDismissTimer: ReturnType<typeof setTimeout> | null = null;
   const tutorialSteps = [
     {
       title: "33kV Indian Queens Switchgear",
-      body: "Welcome to the ENSPEC Panos control panel.\n\nThis is a real 33kV switchgear assembly used at the Indian Queens site (NGET). Let's learn the controls.",
+      body:
+        "Welcome to the ENSPEC Panos control panel.\n\n" +
+        "33kV switchgear — Indian Queens substation, Cornwall. " +
+        "Built for NGET (National Grid). Rated 3150A. " +
+        "This is real infrastructure — not a demo model.\n\n" +
+        "Let's learn the controls.",
       footer: "Press A to begin",
       expect: "move_closer" as XRButtonAction,
     },
@@ -387,6 +405,32 @@ async function main() {
     if (tutorialStep < 0 || tutorialStep >= tutorialSteps.length) return;
     const step = tutorialSteps[tutorialStep];
     showGuidedPrompt(step.title, step.body, step.footer);
+
+    // Final card: auto-dismiss after 4s, then pulse hotspots once so the
+    // user's eye gets pulled to the interactive markers.
+    const isFinalStep = step.expect === null;
+    if (isFinalStep) {
+      if (finalCardDismissTimer) clearTimeout(finalCardDismissTimer);
+      finalCardDismissTimer = setTimeout(() => {
+        finalCardDismissTimer = null;
+        // Only auto-dismiss if we're still on the final card.
+        if (
+          tutorialStep === tutorialSteps.length - 1 &&
+          tutorialSteps[tutorialStep].expect === null
+        ) {
+          tutorialStep = -1;
+          hideGuidedPrompt();
+          pulseHotspotsOnce();
+        }
+      }, 4000);
+    }
+  }
+
+  function clearFinalCardTimer(): void {
+    if (finalCardDismissTimer) {
+      clearTimeout(finalCardDismissTimer);
+      finalCardDismissTimer = null;
+    }
   }
 
   function advanceTutorial(action: XRButtonAction): boolean {
@@ -395,23 +439,33 @@ async function main() {
 
     const step = tutorialSteps[tutorialStep];
 
-    // Last step — any button dismisses
+    // Last step — any button dismisses (also fires the hotspot pulse so
+    // it works the same whether the user waits 4s or hits a button).
     if (step.expect === null) {
+      clearFinalCardTimer();
       tutorialStep = -1;
       hideGuidedPrompt();
+      pulseHotspotsOnce();
       return true;
     }
 
     // Check if the action matches what we expect
     if (action === step.expect) {
-      tutorialStep++;
-      if (tutorialStep >= tutorialSteps.length) {
-        // Show final card
-        tutorialStep = tutorialSteps.length - 1;
+      // Visual confirmation before transitioning, so the user knows their
+      // press registered and they're not stabbing the controller blind.
+      showSuccessFeedback("✓ Got it!");
+      const nextIndex = tutorialStep + 1;
+      setTimeout(() => {
+        // Bail if the tutorial state changed during the 800ms window
+        // (e.g. user left VR, panic-reset, etc.).
+        if (tutorialStep !== nextIndex - 1) return;
+        if (nextIndex >= tutorialSteps.length) {
+          tutorialStep = tutorialSteps.length - 1;
+        } else {
+          tutorialStep = nextIndex;
+        }
         showTutorialStep();
-      } else {
-        showTutorialStep();
-      }
+      }, 800);
       return false; // let the action execute too
     }
 
@@ -421,21 +475,64 @@ async function main() {
   onVRStateChanged.add((inVR) => {
     if (inVR) {
       reparentGuidedPromptToXR();
-      showMenu();
-
-      // Start guided tutorial immediately
-      tutorialStep = 0;
-      showTutorialStep();
-      console.log("VR entered — menu + tutorial shown.");
+      // Panic-reset is the one UI element that's visible the whole VR
+      // session — never hidden by the choice screen, tutorial, or menu.
+      showPanicReset();
+      // Run the mode/skybox picker BEFORE the menu/tutorial appear.
+      // The menu and tutorial both reveal after the user picks.
+      void runVRChoiceFlow();
+      console.log("VR entered — choice screen shown.");
     } else {
       stopScriptedDemo();
       hideHotspots();
       closeInfoPanel();
       hideGuidedPrompt();
+      hidePanicReset();
+      clearFinalCardTimer();
       tutorialStep = -1;
       inspectActive = false;
     }
   });
+
+  /**
+   * Show the VR choice screen, apply the chosen background, then branch:
+   *   quick → runQuickTour (skips the button-driven tutorial entirely)
+   *   full  → reveal menu and start the tutorialSteps walkthrough
+   */
+  async function runVRChoiceFlow(): Promise<void> {
+    try {
+      const choices = await showVRChoiceScreen(scene);
+      console.log(
+        `VR choice: mode=${choices.mode}, skybox=${choices.skyboxId}`
+      );
+      setSkybox(scene, choices.skyboxId);
+
+      if (choices.mode === "quick") {
+        // Quick Tour — fully scripted, no tutorial cards.
+        doReset();
+        hideGuidedPrompt();
+        clearFinalCardTimer();
+        tutorialStep = -1;
+        showMenu();
+        await runQuickTour(scene, {
+          moveCloser: () => stepGuidedView(1),
+          revealInterior: () => doToggleInterior(),
+          explode: () => doToggleExploded(),
+          reset: () => doReset(),
+        });
+      } else {
+        // Full Experience — reveal menu and start the guided tutorial.
+        showMenu();
+        tutorialStep = 0;
+        showTutorialStep();
+      }
+    } catch (err) {
+      console.error("VR choice flow failed — falling back to tutorial.", err);
+      showMenu();
+      tutorialStep = 0;
+      showTutorialStep();
+    }
+  }
 
   // ── Long press: show help card ────────────────────────
   onLongPress.add(() => {
