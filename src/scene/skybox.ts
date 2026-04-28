@@ -179,3 +179,14 @@ export function getCurrentSkyboxId(): string {
 export function getSkyboxOptions(): SkyboxOption[] {
   return SKYBOX_OPTIONS;
 }
+
+/**
+ * Returns true if the given skybox option uses a photo (i.e. a 360°
+ * panorama). False for the procedural-colour-only options like Dark
+ * Studio. Callers can use this to enable photo-only effects such as
+ * the contact-shadow disc.
+ */
+export function isPhotoSkybox(id: string): boolean {
+  const opt = SKYBOX_OPTIONS.find((o) => o.id === id);
+  return !!opt?.file;
+}

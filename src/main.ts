@@ -78,7 +78,12 @@ import {
   showSuccessFeedback,
 } from "./ui/guidedPrompt";
 import { onLongPress } from "./interactions/xrSetup";
-import { initSkybox, setSkybox } from "./scene/skybox";
+import { initSkybox, setSkybox, isPhotoSkybox } from "./scene/skybox";
+import {
+  createContactShadow,
+  showContactShadow,
+  hideContactShadow,
+} from "./scene/contactShadow";
 import { showVRChoiceScreen, showSkyboxPickerOnly } from "./ui/vrChoiceScreen";
 import { runQuickTour, isQuickTourActive, skipQuickTourAct } from "./flow/quickTour";
 import {
@@ -187,6 +192,21 @@ async function main() {
   initGuidedPrompt(scene);
 
   createHotspots(scene, modelInfo ?? undefined);
+  createContactShadow(scene, modelInfo ?? undefined);
+
+  /**
+   * Apply a skybox AND toggle the contact-shadow disc to match.
+   * Photo skyboxes need the disc so the cabinet doesn't visibly float;
+   * Dark Studio's solid floor handles its own grounding so we hide it.
+   */
+  function applySkybox(id: string): void {
+    setSkybox(scene, id);
+    if (isPhotoSkybox(id)) {
+      showContactShadow();
+    } else {
+      hideContactShadow();
+    }
+  }
   onHotspotActivated((data, worldPos) => {
     // Always teleport to the clicked hotspot — user should be able to click
     // any hotspot, any number of times, and get transported there every time.
@@ -396,7 +416,7 @@ async function main() {
             setSpectatorStatus("Settings", "Choosing background");
           }
           const skyboxId = await showSkyboxPickerOnly(scene);
-          setSkybox(scene, skyboxId);
+          applySkybox(skyboxId);
           showMenu();
           if (isInVR()) {
             setSpectatorStatus("Free Exploration", "Background updated");
@@ -586,7 +606,7 @@ async function main() {
       console.log(
         `VR choice: mode=${choices.mode}, skybox=${choices.skyboxId}`
       );
-      setSkybox(scene, choices.skyboxId);
+      applySkybox(choices.skyboxId);
 
       if (choices.mode === "quick") {
         // Quick Tour — fully scripted, no tutorial cards.
