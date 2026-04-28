@@ -70,14 +70,17 @@ export interface ExplodeRule {
   displacement: Vector3;
 }
 
+// Cabinet world-space size is roughly 6.7m × 2.8m × 2.6m (W×H×D).
+// Earlier 1.0–1.5m offsets left parts overlapping the ghosted frame —
+// boosted so each subsystem clears the enclosure boundary cleanly.
 export const EXPLODED = {
-  animDuration: 1.5,
+  animDuration: 2.0,
   rules: [
-    { nameMatch: "busbar_assembly", isPrefix: false, displacement: new Vector3(0, 1.0, 0) },
-    { nameMatch: "capacitor_bank", isPrefix: false, displacement: new Vector3(1.5, 0, 0) },
-    { nameMatch: "cable_assembly", isPrefix: false, displacement: new Vector3(-1.5, 0, 0) },
+    { nameMatch: "busbar_assembly", isPrefix: false, displacement: new Vector3(0, 2.5, 0) },   // up
+    { nameMatch: "capacitor_bank", isPrefix: false, displacement: new Vector3(4.0, 0, 0) },    // right
+    { nameMatch: "cable_assembly", isPrefix: false, displacement: new Vector3(-4.0, 0, 0) },   // left
     // terminal_rail (prefix) matches terminal_rail_01 in the rebuilt model
-    { nameMatch: "terminal_rail", isPrefix: true, displacement: new Vector3(0, 0, -1.0) },
+    { nameMatch: "terminal_rail", isPrefix: true, displacement: new Vector3(0, 0, -3.5) },     // back
   ] as ExplodeRule[],
 };
 

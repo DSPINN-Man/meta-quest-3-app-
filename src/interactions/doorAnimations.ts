@@ -4,8 +4,46 @@ import {
   PBRMaterial,
   StandardMaterial,
   Material,
+  MultiMaterial,
 } from "@babylonjs/core";
 import { DOORS } from "../utils/config";
+
+/**
+ * Resolve the actual fadeable sub-materials of a mesh.
+ *
+ * Our GLB ships every mesh with a MultiMaterial (one slot per Blender
+ * material — 28 in total across the 5 mesh objects). `mesh.material` is
+ * the wrapper, NOT a PBR/Standard material, so the old
+ * `instanceof PBRMaterial` check returned false for every mesh and the
+ * fade system was effectively a no-op.
+ *
+ * Returns a flat list of every PBR / Standard sub-material that actually
+ * controls colour & alpha for this mesh.
+ */
+function resolveFadeMaterials(
+  mesh: AbstractMesh
+): (PBRMaterial | StandardMaterial)[] {
+  const mat = mesh.material;
+  if (!mat) return [];
+
+  const slots = mat instanceof MultiMaterial ? mat.subMaterials : [mat];
+  const result: (PBRMaterial | StandardMaterial)[] = [];
+  for (const sub of slots) {
+    if (!sub) continue;
+    if (sub instanceof PBRMaterial || sub instanceof StandardMaterial) {
+      result.push(sub);
+    }
+  }
+  return result;
+}
+
+/** Drive every relevant sub-material's alpha plus the mesh visibility. */
+function setMeshAlpha(mesh: AbstractMesh, alpha: number): void {
+  mesh.visibility = alpha;
+  for (const sub of resolveFadeMaterials(mesh)) {
+    sub.alpha = alpha;
+  }
+}
 
 /**
  * Door / Panel / Cover animation system — V5.
@@ -133,15 +171,11 @@ export function initDoors(meshes: AbstractMesh[]): void {
 }
 
 function prepareMeshForFade(mesh: AbstractMesh): void {
-  const mat = mesh.material;
-  if (mat instanceof PBRMaterial) {
-    mat.transparencyMode = Material.MATERIAL_ALPHABLEND;
-    mat.backFaceCulling = false;
-    mat.alpha = 1;
-  } else if (mat instanceof StandardMaterial) {
-    mat.transparencyMode = Material.MATERIAL_ALPHABLEND;
-    mat.backFaceCulling = false;
-    mat.alpha = 1;
+  // Walk every sub-material (MultiMaterial-safe) and configure for alpha blend.
+  for (const sub of resolveFadeMaterials(mesh)) {
+    sub.transparencyMode = Material.MATERIAL_ALPHABLEND;
+    sub.backFaceCulling = false;
+    sub.alpha = 1;
   }
   mesh.visibility = 1;
 }
@@ -195,11 +229,24 @@ export function getDoorCount(): number {
 export async function fadeExterior(scene: Scene): Promise<void> {
   if (exteriorFaded) return;
   await animateFadeToAlpha(scene, DOORS.fadeToAlpha);
-  // Disable meshes after fading to near-invisible for performance
+
+  // Keep frame_structure as an ultra-faint ghost outline so the exploded
+  // parts have spatial context — the user still sees the cabinet
+  // silhouette they came from. Hide everything else for performance.
+  const frameMesh = fadeMeshes.find(
+    (m) => m.name.toLowerCase() === DOORS.frameName.toLowerCase()
+  );
   const allFadeable = [...fadeMeshes, ...swingMeshes];
-  for (const mesh of allFadeable) mesh.setEnabled(false);
+  for (const mesh of allFadeable) {
+    if (mesh === frameMesh) {
+      setMeshAlpha(mesh, 0.06);
+      mesh.setEnabled(true);
+    } else {
+      mesh.setEnabled(false);
+    }
+  }
   exteriorFaded = true;
-  console.log("Exterior faded for exploded view.");
+  console.log("Exterior faded for exploded view (frame kept as ghost outline).");
 }
 
 /**
@@ -230,16 +277,14 @@ export function resetDoors(): void {
   for (const mesh of swingMeshes) {
     const orig = swingOriginalY.get(mesh) ?? 0;
     mesh.rotation.y = orig;
-    mesh.visibility = 1;
     mesh.setEnabled(true);
-    if (mesh.material) mesh.material.alpha = 1;
+    setMeshAlpha(mesh, 1);
   }
 
   // Reset fade meshes (exterior shell)
   for (const mesh of fadeMeshes) {
-    mesh.visibility = 1;
     mesh.setEnabled(true);
-    if (mesh.material) mesh.material.alpha = 1;
+    setMeshAlpha(mesh, 1);
   }
 
   doorsOpen = false;
@@ -270,7 +315,6 @@ function animateFadeToAlpha(scene: Scene, targetAlpha: number): Promise<void> {
   return new Promise((resolve) => {
     const startTime = performance.now();
     const startVis = allFadeable.map((m) => m.visibility);
-    const startAlpha = allFadeable.map((m) => m.material?.alpha ?? 1);
 
     const observer = scene.onBeforeRenderObservable.add(() => {
       const elapsed = performance.now() - startTime;
@@ -279,18 +323,16 @@ function animateFadeToAlpha(scene: Scene, targetAlpha: number): Promise<void> {
 
       for (let i = 0; i < allFadeable.length; i++) {
         const mesh = allFadeable[i];
-        mesh.visibility = startVis[i] + (targetAlpha - startVis[i]) * t;
-        if (mesh.material) {
-          mesh.material.alpha = startAlpha[i] + (targetAlpha - startAlpha[i]) * t;
-        }
+        const lerped = startVis[i] + (targetAlpha - startVis[i]) * t;
+        // setMeshAlpha pushes the value into every sub-material slot of a
+        // MultiMaterial — required for our GLB.
+        setMeshAlpha(mesh, lerped);
       }
 
       if (t >= 1) {
         scene.onBeforeRenderObservable.remove(observer);
-        // Set exact final values
         for (const mesh of allFadeable) {
-          mesh.visibility = targetAlpha;
-          if (mesh.material) mesh.material.alpha = targetAlpha;
+          setMeshAlpha(mesh, targetAlpha);
         }
         resolve();
       }

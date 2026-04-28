@@ -59,9 +59,29 @@ export function initExplodedView(meshes: AbstractMesh[]): void {
     const matches = meshes.filter((m) => {
       if (m === root) return false;
       if (m.getTotalVertices() === 0) return false;
+      if (!m.name) return false;
       if (m.name.toLowerCase() === frameName) return false;
 
-      const name = m.name.toLowerCase();
+      // Defensive guard: skip Babylon helper / UI meshes. The snapshot
+      // taken in main.ts excludes UI added later, but the GLB loader can
+      // produce internal nodes (e.g. "__root__") and we may add hotspot
+      // or menu meshes before init in some flows.
+      const rawName = m.name;
+      if (
+        rawName.startsWith("__") ||
+        rawName.startsWith("hotspot") ||
+        rawName.startsWith("ring") ||
+        rawName.startsWith("stem") ||
+        rawName.startsWith("menuBtn") ||
+        rawName.startsWith("panicReset") ||
+        rawName.startsWith("guidedPrompt") ||
+        rawName.startsWith("infoPanel") ||
+        rawName.startsWith("skybox")
+      ) {
+        return false;
+      }
+
+      const name = rawName.toLowerCase();
       const match = rule.nameMatch.toLowerCase();
 
       if (rule.isPrefix) {
