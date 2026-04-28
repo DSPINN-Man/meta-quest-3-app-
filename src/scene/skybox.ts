@@ -2,7 +2,6 @@ import {
   Scene,
   StandardMaterial,
   Texture,
-  Color3,
   Color4,
   PhotoDome,
 } from "@babylonjs/core";
@@ -97,7 +96,7 @@ export function setSkybox(_scene: Scene | undefined, optionId: string): void {
       tex.onLoadObservable.addOnce(() => {
         console.log(`Skybox: "${option.label}" PhotoDome loaded from ${texturePath}`);
         s.clearColor = new Color4(0, 0, 0, 1);
-        applyGroundColor(s, option.groundColor);
+        applyGroundLook(s, option);
       });
       // Texture has no first-class onError observable on all versions —
       // we attach a low-level error handler via the underlying image.
@@ -129,19 +128,31 @@ function disposeDome(): void {
 }
 
 /**
- * Repaint the ground mesh's diffuse colour. The ground is created in
- * environment.ts with name "ground" (XR.teleportFloorMeshName). We look
- * it up by name to avoid threading a reference through every call site.
+ * Show or hide the ground mesh and recolour it for the active skybox.
+ *
+ * When a photo skybox is active we *hide* the ground mesh entirely so
+ * the dome's lower hemisphere becomes the visible "floor" — the user
+ * sees the actual photo's ground underfoot rather than a flat opaque
+ * disc that gives away the studio illusion. For Dark Studio (no photo)
+ * we keep the ENSPEC blue floor as the deliberate "showroom" look.
+ *
+ * Cabinet contact shadows are dropped along with the floor in photo
+ * mode — that's a reasonable trade for not seeing a hard horizon ring
+ * where the floor disc meets the dome.
  */
-function applyGroundColor(s: Scene, color: Color3): void {
+function applyGroundLook(s: Scene, option: SkyboxOption): void {
   const ground = s.getMeshByName("ground");
   if (!ground) return;
+
+  const photoMode = !!option.file;
+  ground.setEnabled(!photoMode);
+
+  // Even in photo mode we keep the diffuse colour up-to-date so a quick
+  // toggle back to Dark Studio looks correct without recomputing.
   const mat = ground.material;
   if (mat instanceof StandardMaterial) {
-    mat.diffuseColor = color.clone();
-    // Slight emissive tint so the floor doesn't go pure-grey under
-    // shadows — keeps the lighting "studio" feel intact.
-    mat.emissiveColor = color.scale(0.05);
+    mat.diffuseColor = option.groundColor.clone();
+    mat.emissiveColor = option.groundColor.scale(0.05);
   }
 }
 
@@ -153,7 +164,7 @@ function applyGroundColor(s: Scene, color: Color3): void {
  */
 function applyFallbackColor(s: Scene, option: SkyboxOption): void {
   s.clearColor = option.fallbackColor.clone();
-  applyGroundColor(s, option.groundColor);
+  applyGroundLook(s, option);
   console.log(
     `Skybox: "${option.label}" — procedural colour fallback applied.`
   );
