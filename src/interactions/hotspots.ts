@@ -365,19 +365,26 @@ export function areHotspotsVisible(): boolean {
  * Briefly scales the ring up and back down over ~700ms so the user sees
  * "look, these glowing things are interactive". Used when the tutorial
  * finishes — we want to draw the eye to the hotspots before the user
- * starts free-exploring.
+ * starts free-exploring. Optionally restrict to specific hotspot ids
+ * (e.g. only the ones the user hasn't inspected yet).
  */
-export function pulseHotspotsOnce(): void {
+export function pulseHotspotsOnce(idsToPulse?: string[]): void {
   if (markers.length === 0) return;
+  const filterSet = idsToPulse ? new Set(idsToPulse) : null;
+  const targets = filterSet
+    ? markers.filter((m) => filterSet.has(m.data.id))
+    : markers.slice();
+  if (targets.length === 0) return;
+
   // Make sure rings are visible first — in case the caller forgot.
-  for (const m of markers) m.ring.setEnabled(true);
+  for (const m of targets) m.ring.setEnabled(true);
 
   const duration = 700;
   const peakScale = 1.6;
   const startTime = performance.now();
 
   // Capture base scales so we restore exactly to where they were.
-  const bases = markers.map((m) => m.ring.scaling.clone());
+  const bases = targets.map((m) => m.ring.scaling.clone());
 
   const tick = () => {
     const elapsed = performance.now() - startTime;
@@ -386,8 +393,8 @@ export function pulseHotspotsOnce(): void {
     const bell = Math.sin(Math.PI * t);
     const factor = 1 + (peakScale - 1) * bell;
 
-    for (let i = 0; i < markers.length; i++) {
-      const ring = markers[i].ring;
+    for (let i = 0; i < targets.length; i++) {
+      const ring = targets[i].ring;
       ring.scaling.x = bases[i].x * factor;
       ring.scaling.y = bases[i].y * factor;
       ring.scaling.z = bases[i].z * factor;
@@ -397,8 +404,8 @@ export function pulseHotspotsOnce(): void {
       requestAnimationFrame(tick);
     } else {
       // Restore base scales precisely.
-      for (let i = 0; i < markers.length; i++) {
-        markers[i].ring.scaling.copyFrom(bases[i]);
+      for (let i = 0; i < targets.length; i++) {
+        targets[i].ring.scaling.copyFrom(bases[i]);
       }
     }
   };

@@ -47,6 +47,20 @@ export function showVRChoiceScreen(scene: Scene): Promise<VRChoices> {
   });
 }
 
+/**
+ * Show ONLY the background picker — used for the in-VR settings menu
+ * so visitors can change the skybox mid-session without restarting.
+ * Resolves with the chosen skyboxId.
+ */
+export function showSkyboxPickerOnly(scene: Scene): Promise<string> {
+  return new Promise((resolve) => {
+    showSkyboxPicker(scene, (skyboxId) => {
+      disposeActive();
+      resolve(skyboxId);
+    });
+  });
+}
+
 // ── Step 1: Mode picker ─────────────────────────────────────────
 
 function showModePicker(

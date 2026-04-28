@@ -60,6 +60,7 @@ export function createFloatingMenu(scene: Scene, modelInfo?: ModelInfo): void {
     { label: "B  Back", id: "move_back" },
     { label: "X  Interior", id: "toggle_interior" },
     { label: "Y  Explode", id: "toggle_explode" },
+    { label: "Background", id: "settings" },
     { label: "Quick Tour", id: "quick_tour" },
     { label: "Reset View", id: "reset" },
   ];
@@ -70,7 +71,8 @@ export function createFloatingMenu(scene: Scene, modelInfo?: ModelInfo): void {
 
   for (let i = 0; i < buttonDefs.length; i++) {
     const def = buttonDefs[i];
-    const isReset = def.id === "reset" || def.id === "quick_tour";
+    const isReset =
+      def.id === "reset" || def.id === "quick_tour" || def.id === "settings";
     const yOffset = (buttonDefs.length / 2 - i - 0.5) * (btnHeight + gap);
 
     const plane = MeshBuilder.CreatePlane(

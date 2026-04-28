@@ -1,5 +1,6 @@
 import { Scene } from "@babylonjs/core";
 import { showGuidedPrompt, hideGuidedPrompt } from "../ui/guidedPrompt";
+import { setSpectatorStatus } from "../ui/spectatorOverlay";
 
 /**
  * Quick Tour — a fully scripted ~90 second showcase the visitor can sit
@@ -37,10 +38,34 @@ interface ScheduleEntry {
   run: () => Promise<void> | void;
 }
 
+/**
+ * State for the currently-running tour, exposed so that input handlers
+ * (e.g. right grip → "skip ahead") can poke the schedule without having
+ * to plumb extra arguments through every caller.
+ */
+let activeTourSkipFlag = false;
+let tourActive = false;
+
+/** True while a Quick Tour is currently running. */
+export function isQuickTourActive(): boolean {
+  return tourActive;
+}
+
+/**
+ * Skip the rest of the current act and jump straight to the next.
+ * No-op if a tour isn't running. The wait-loop inside runQuickTour
+ * polls this flag and breaks early when set.
+ */
+export function skipQuickTourAct(): void {
+  if (tourActive) activeTourSkipFlag = true;
+}
+
 export async function runQuickTour(
   _scene: Scene,
   actions: QuickTourActions
 ): Promise<void> {
+  tourActive = true;
+  activeTourSkipFlag = false;
   // ── ACT 1 — The Problem ────────────────────────────────────
   // Open with the stakes, not the spec sheet. An engineer cares about
   // *why* the panel exists before *what's* inside it.
@@ -53,6 +78,7 @@ export async function runQuickTour(
     "an entire region's grid feed?",
     "Quick Tour starting..."
   );
+  setSpectatorStatus("Quick Tour", "Act 1 — Why this panel exists");
 
   const schedule: ScheduleEntry[] = [
     // ── ACT 2 — The Engineering Challenge ──────────────────────
@@ -67,6 +93,7 @@ export async function runQuickTour(
           "Let's get closer and see what that actually looks like.",
           "Moving in..."
         );
+        setSpectatorStatus("Quick Tour", "Act 2 — Engineering challenge");
         await actions.moveCloser();
       },
     },
@@ -82,6 +109,7 @@ export async function runQuickTour(
           "power and who doesn't.",
           "Revealing internals..."
         );
+        setSpectatorStatus("Quick Tour", "Act 3 — Inside the cabinet");
         await actions.revealInterior();
       },
     },
@@ -98,6 +126,7 @@ export async function runQuickTour(
           "• Protection rail — relays, MCBs, PLC I/O linked to NGET SCADA",
           "Spreading components apart..."
         );
+        setSpectatorStatus("Quick Tour", "Act 3 — Each subsystem in isolation");
         await actions.explode();
       },
     },
@@ -115,6 +144,7 @@ export async function runQuickTour(
           "This is what reliable infrastructure looks like up close.",
           "Reading time..."
         );
+        setSpectatorStatus("Quick Tour", "Act 4 — Why it matters");
       },
     },
     {
@@ -133,14 +163,17 @@ export async function runQuickTour(
     },
   ];
 
-  // Run the schedule in absolute time. Cancellable via cancelToken so an
-  // outer reset (panic-reset / VR exit) can stop a tour mid-way without
-  // leaving stale setTimeouts firing minutes later.
+  // Run the schedule in absolute time. The wait between each entry is
+  // pollable in 200ms slices so a right-grip skip can break out of the
+  // current wait early and jump to the next act.
   const startTime = performance.now();
   for (const entry of schedule) {
-    const elapsedMs = performance.now() - startTime;
-    const waitMs = Math.max(0, entry.at * 1000 - elapsedMs);
-    await sleep(waitMs);
+    const targetMs = entry.at * 1000;
+    while (performance.now() - startTime < targetMs) {
+      if (activeTourSkipFlag) break;
+      await sleep(200);
+    }
+    activeTourSkipFlag = false;
     try {
       await entry.run();
     } catch (err) {
@@ -148,9 +181,16 @@ export async function runQuickTour(
     }
   }
 
-  // Hold the final card for a few seconds, then hide so it doesn't linger.
-  await sleep(6000);
+  // Hold the final card for a few seconds (also skippable), then hide.
+  const finalHoldMs = 6000;
+  const finalStart = performance.now();
+  while (performance.now() - finalStart < finalHoldMs) {
+    if (activeTourSkipFlag) break;
+    await sleep(200);
+  }
+  activeTourSkipFlag = false;
   hideGuidedPrompt();
+  tourActive = false;
 }
 
 function sleep(ms: number): Promise<void> {

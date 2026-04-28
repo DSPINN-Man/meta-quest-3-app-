@@ -84,6 +84,53 @@
         width: 22px;
         height: 22px;
       }
+
+      /* ── Spectator overlay (booth TV) ─────────────────── */
+      /* Shows what the Quest 3 user is currently doing so the
+         person watching the laptop / TV mirror gets context. */
+      #spectatorOverlay {
+        display: none;
+        position: fixed;
+        bottom: 28px;
+        right: 28px;
+        z-index: 40;
+        padding: 14px 22px;
+        border: 1px solid rgba(0, 200, 240, 0.35);
+        border-radius: 14px;
+        background: rgba(8, 12, 24, 0.78);
+        color: rgba(255, 255, 255, 0.92);
+        font-family: system-ui, -apple-system, sans-serif;
+        font-size: 14px;
+        font-weight: 500;
+        letter-spacing: 0.4px;
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        max-width: 320px;
+        line-height: 1.4;
+        pointer-events: none;
+        user-select: none;
+      }
+      #spectatorOverlay .label {
+        display: block;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 1.2px;
+        color: rgba(0, 220, 255, 0.85);
+        text-transform: uppercase;
+        margin-bottom: 4px;
+      }
+      #spectatorOverlay .status {
+        display: block;
+        font-size: 16px;
+        font-weight: 600;
+        color: rgba(255, 255, 255, 0.96);
+      }
+      #spectatorOverlay .detail {
+        display: block;
+        font-size: 12px;
+        color: rgba(180, 195, 210, 0.75);
+        margin-top: 4px;
+      }
     </style>
   </head>
   <body>
@@ -91,6 +138,12 @@
     <div id="loading">
       <span id="loadingText">Loading model...</span>
       <div id="loadingBarTrack"><div id="loadingBarFill"></div></div>
+    </div>
+
+    <div id="spectatorOverlay" aria-hidden="true">
+      <span class="label">Live VR Session</span>
+      <span class="status" id="spectatorStatus">Idle</span>
+      <span class="detail" id="spectatorDetail"></span>
     </div>
 
     <button id="enterVR" aria-label="Enter VR">

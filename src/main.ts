@@ -48,7 +48,7 @@ import {
   hideHotspots,
   pulseHotspotsOnce,
 } from "./interactions/hotspots";
-import { createFloatingMenu, onMenuButton, showMenu } from "./ui/floatingMenu";
+import { createFloatingMenu, onMenuButton, showMenu, hideMenu } from "./ui/floatingMenu";
 import {
   createPanicReset,
   onPanicReset,
@@ -79,8 +79,20 @@ import {
 } from "./ui/guidedPrompt";
 import { onLongPress } from "./interactions/xrSetup";
 import { initSkybox, setSkybox } from "./scene/skybox";
-import { showVRChoiceScreen } from "./ui/vrChoiceScreen";
-import { runQuickTour } from "./flow/quickTour";
+import { showVRChoiceScreen, showSkyboxPickerOnly } from "./ui/vrChoiceScreen";
+import { runQuickTour, isQuickTourActive, skipQuickTourAct } from "./flow/quickTour";
+import {
+  showSpectatorOverlay,
+  hideSpectatorOverlay,
+  setSpectatorStatus,
+} from "./ui/spectatorOverlay";
+import {
+  createHotspotCounter,
+  setHotspotCount,
+  showHotspotCounter,
+  hideHotspotCounter,
+} from "./ui/hotspotCounter";
+import { HOTSPOTS } from "./utils/config";
 
 async function main() {
   const canvas = document.getElementById("renderCanvas") as HTMLCanvasElement;
@@ -192,6 +204,8 @@ async function main() {
       inspectActive = true;
     }
     showInfoPanel(data, worldPos, scene);
+    setSpectatorStatus("Inspecting", data.title);
+    markHotspotInspected(data.id);
   });
 
   async function doOpenDoors() {
@@ -199,6 +213,7 @@ async function main() {
       await openAllDoors(scene);
     }
     showHotspots();
+    showHotspotCounter();
     enableInteriorLight();
   }
 
@@ -211,6 +226,7 @@ async function main() {
         await unfadeExterior(scene);
       }
       hideHotspots();
+      hideHotspotCounter();
       closeInfoPanel();
       disableInteriorLight();
       await closeAllDoors(scene);
@@ -220,8 +236,10 @@ async function main() {
   async function doToggleInterior() {
     if (areDoorsOpen() || isExteriorFaded()) {
       await doCloseDoors();
+      if (isInVR()) setSpectatorStatus("Free Exploration", "Cabinet sealed");
     } else {
       await doOpenDoors();
+      if (isInVR()) setSpectatorStatus("Interior Visible", "Cabinet shell faded");
     }
   }
 
@@ -230,8 +248,10 @@ async function main() {
       await collapse(scene);
       await unfadeExterior(scene);
       hideHotspots();
+      hideHotspotCounter();
       disableInteriorLight();
       await closeAllDoors(scene);
+      if (isInVR()) setSpectatorStatus("Free Exploration", "Components reassembled");
       return;
     }
 
@@ -241,7 +261,9 @@ async function main() {
     await fadeExterior(scene);
     enableInteriorLight();
     showHotspots();
+    showHotspotCounter();
     await toggleExplodedView(scene);
+    if (isInVR()) setSpectatorStatus("Exploded View", "Subsystems separated for inspection");
   }
 
   function doReset() {
@@ -250,6 +272,8 @@ async function main() {
     resetDoors();
     resetGuidedView();
     hideHotspots();
+    hideHotspotCounter();
+    resetHotspotProgress();
     closeInfoPanel();
     disableInteriorLight();
     recenterUser();
@@ -257,6 +281,7 @@ async function main() {
     camera.beta = camDefaults.beta;
     camera.radius = camDefaults.radius;
     camera.target = camDefaults.target.clone();
+    if (isInVR()) setSpectatorStatus("Reset", "Back to home view");
   }
 
   async function runMappedAction(action: XRButtonAction) {
@@ -282,6 +307,15 @@ async function main() {
   async function handleXRAction(action: XRButtonAction) {
     console.log(`handleXRAction: ${action}`);
 
+    // While the Quick Tour is running, the right grip should *skip the
+    // current act*, not full-reset. Reset behaviour returns once the
+    // tour completes (or the user exits / panic-resets via the menu).
+    if (action === "reset_view" && isQuickTourActive()) {
+      console.log("Quick Tour active — grip skips to next act");
+      skipQuickTourAct();
+      return;
+    }
+
     // B button while inspecting a hotspot: close the card and step back
     if (inspectActive && action === "move_back") {
       inspectActive = false;
@@ -295,9 +329,34 @@ async function main() {
 
   createFloatingMenu(scene, modelInfo ?? undefined);
   createPanicReset(scene, modelInfo ?? undefined);
+  createHotspotCounter(scene, modelInfo ?? undefined);
   onPanicReset(() => {
     void handleXRAction("reset_view");
   });
+
+  // ── Hotspot inspection tracking ─────────────────────────
+  // Track which subsystem hotspots the visitor has clicked at least
+  // once. The counter shows progress; once they've seen 4 of 5 we give
+  // the remaining one an extra attention pulse.
+  const inspectedHotspots = new Set<string>();
+  const totalHotspots = HOTSPOTS.length;
+  function markHotspotInspected(id: string): void {
+    if (inspectedHotspots.has(id)) return;
+    inspectedHotspots.add(id);
+    setHotspotCount(inspectedHotspots.size, totalHotspots);
+    const remaining = totalHotspots - inspectedHotspots.size;
+    if (remaining > 0 && remaining <= 1) {
+      // One left — pulse it so the visitor sees there's more to find.
+      const remainingIds = HOTSPOTS
+        .map((h) => h.id)
+        .filter((id) => !inspectedHotspots.has(id));
+      pulseHotspotsOnce(remainingIds);
+    }
+  }
+  function resetHotspotProgress(): void {
+    inspectedHotspots.clear();
+    setHotspotCount(0, totalHotspots);
+  }
   onMenuButton((id) => {
     switch (id) {
       case "move_closer":
@@ -326,6 +385,22 @@ async function main() {
             explode: () => doToggleExploded(),
             reset: () => doReset(),
           });
+        })();
+        break;
+      case "settings":
+        // In-VR background switcher. Hide the menu while the picker is
+        // open so the controller ray doesn't pick the menu through it.
+        void (async () => {
+          hideMenu();
+          if (isInVR()) {
+            setSpectatorStatus("Settings", "Choosing background");
+          }
+          const skyboxId = await showSkyboxPickerOnly(scene);
+          setSkybox(scene, skyboxId);
+          showMenu();
+          if (isInVR()) {
+            setSpectatorStatus("Free Exploration", "Background updated");
+          }
         })();
         break;
     }
@@ -480,6 +555,8 @@ async function main() {
       // Panic-reset is the one UI element that's visible the whole VR
       // session — never hidden by the choice screen, tutorial, or menu.
       showPanicReset();
+      showSpectatorOverlay();
+      setSpectatorStatus("Choosing experience", "Mode + background picker");
       // Run the mode/skybox picker BEFORE the menu/tutorial appear.
       // The menu and tutorial both reveal after the user picks.
       void runVRChoiceFlow();
@@ -487,9 +564,11 @@ async function main() {
     } else {
       stopScriptedDemo();
       hideHotspots();
+      hideHotspotCounter();
       closeInfoPanel();
       hideGuidedPrompt();
       hidePanicReset();
+      hideSpectatorOverlay();
       clearFinalCardTimer();
       tutorialStep = -1;
       inspectActive = false;
@@ -516,15 +595,18 @@ async function main() {
         clearFinalCardTimer();
         tutorialStep = -1;
         showMenu();
+        setSpectatorStatus("Quick Tour", "Auto-guided narrative");
         await runQuickTour(scene, {
           moveCloser: () => stepGuidedView(1),
           revealInterior: () => doToggleInterior(),
           explode: () => doToggleExploded(),
           reset: () => doReset(),
         });
+        setSpectatorStatus("Free Exploration", "Tour complete");
       } else {
         // Full Experience — reveal menu and start the guided tutorial.
         showMenu();
+        setSpectatorStatus("Tutorial", "Learning the controls");
         tutorialStep = 0;
         showTutorialStep();
       }
