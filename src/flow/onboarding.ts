@@ -7,7 +7,7 @@ import {
   Observer,
   Observable,
 } from "@babylonjs/core";
-import { TIMING, AUTO_ROTATE } from "../utils/config";
+import { TIMING } from "../utils/config";
 import { showIntroScreen } from "../ui/introScreen";
 import { showTutorial } from "../ui/tutorial";
 import { resetDoors } from "../interactions/doorAnimations";
@@ -126,21 +126,13 @@ async function runOnboardingInternal(): Promise<void> {
   await tutorial.promise;
   detachSkipListener();
 
-  // ── Phase 3: Cinematic Orbit (DESKTOP ONLY) ───────────
-  // Skip orbit in VR — it's disorienting and the user is already
-  // positioned in front of the model with spatial awareness.
-  if (!vr) {
-    console.log("Onboarding: orbit");
-    orbitSkipped = false;
-    const skipOrbit = () => {
-      orbitSkipped = true;
-    };
-    attachSkipListener(skipOrbit);
-    await cinematicOrbit();
-    detachSkipListener();
-  } else {
-    console.log("Onboarding: skipping orbit in VR — straight to explore.");
-  }
+  // ── Phase 3: Cinematic Orbit — DISABLED ────────────────
+  // The cinematic 360° orbit was running every time the kiosk idle
+  // reset fired, which made the model "keep moving when not used"
+  // and broke the illusion of a real panel sitting on the ground.
+  // cinematicOrbit() is kept around for potential future use but no
+  // longer runs automatically on desktop or VR.
+  console.log("Onboarding: orbit phase skipped — camera stays put.");
 
   // ── Phase 4: Transition to Free Explore ───────────────
   console.log("Onboarding: explore mode");
@@ -155,15 +147,15 @@ async function runOnboardingInternal(): Promise<void> {
   onboardingActive = false;
   onOnboardingCompleted.notifyObservers(vr);
 
-  // Enable subtle auto-rotate turntable (desktop only)
-  if (!vr) {
-    camera.useAutoRotationBehavior = true;
-    if (camera.autoRotationBehavior) {
-      camera.autoRotationBehavior.idleRotationSpeed = AUTO_ROTATE.speed;
-      camera.autoRotationBehavior.idleRotationWaitTime = AUTO_ROTATE.waitTime;
-      camera.autoRotationBehavior.idleRotationSpinupTime = AUTO_ROTATE.spinupTime;
-      camera.autoRotationBehavior.zoomStopsAnimation = true;
-    }
+  // Auto-rotate disabled. Visitors said the idle turntable spin made
+  // the model read as a synthetic 3D rendering rather than a real
+  // panel sitting on the ground. Without rotation it stays put like
+  // a real-world object, which is the desired "OG" feel.
+  camera.useAutoRotationBehavior = false;
+  if (camera.autoRotationBehavior) {
+    // Defensive: zero the speed too in case something else flips the
+    // flag back on.
+    camera.autoRotationBehavior.idleRotationSpeed = 0;
   }
 
   // Start kiosk idle watcher
