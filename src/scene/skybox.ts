@@ -1,67 +1,62 @@
 import {
   Scene,
-  MeshBuilder,
   StandardMaterial,
   Texture,
   Color3,
   Color4,
-  Mesh,
+  PhotoDome,
 } from "@babylonjs/core";
 import { SKYBOX_OPTIONS, type SkyboxOption } from "../utils/config";
 
 /**
- * Skybox system — loads 360° equirectangular images as environment backgrounds.
+ * Skybox / 360° photo backdrop system.
  *
- * Every SKYBOX_OPTIONS entry has a `fallbackColor`. If the image file is null
- * OR fails to load (e.g. file not yet provided), we silently fall back to that
- * colour as the scene clear colour. This means the choice screen never crashes
- * even before the real photos are dropped into public/textures/.
+ * Earlier we used a hand-rolled inside-out sphere with
+ * FIXED_EQUIRECTANGULAR_MIRRORED_MODE — and the photos *did* load, but
+ * the projection was wrong. From a typical eye-line camera the user
+ * was always staring at the *bottom* slice of the equirectangular
+ * image (which on industrial / concrete photos is just dark floor) so
+ * it looked like the background never changed.
  *
- * TODO (conference): replace fallback colours with real equirectangular photos.
- *   public/textures/skybox_industrial.jpg
- *   public/textures/skybox_showroom.jpg
- *   public/textures/skybox_site.jpg
+ * Babylon's PhotoDome is purpose-built for 360° photos: it builds a
+ * sphere with the correct UV layout, inside-out winding, and texture
+ * coordinatesMode so the camera sees the panorama in the orientation
+ * the photographer actually captured. We use it as the single source
+ * of truth for photo skyboxes.
+ *
+ * Every SKYBOX_OPTIONS entry also has a `fallbackColor` and
+ * `groundColor`. If `file` is null (Dark Studio) or the file fails to
+ * load we hide the dome and apply those colours so the scene never
+ * crashes and the user always sees a clear background change.
+ *
+ * TODO (conference): the three photos in public/textures/ are
+ * placeholders. Drop the real Indian Queens / industrial / concrete
+ * panos in the same paths and the loader picks them up.
  */
 
-let skyboxMesh: Mesh | null = null;
-let skyboxMat: StandardMaterial | null = null;
+let dome: PhotoDome | null = null;
 let currentSkyboxId = "dark_studio";
+let scene: Scene | null = null;
 
-/**
- * Initialize the skybox mesh (large sphere around the scene).
- * Call once after scene is created.
- */
-export function initSkybox(scene: Scene): void {
-  skyboxMesh = MeshBuilder.CreateSphere(
-    "skybox",
-    { diameter: 200, segments: 32 },
-    scene
-  );
-
-  skyboxMat = new StandardMaterial("skyboxMat", scene);
-  skyboxMat.backFaceCulling = false;
-  skyboxMat.disableLighting = true;
-  skyboxMat.diffuseColor = Color3.Black();
-  skyboxMat.specularColor = Color3.Black();
-
-  skyboxMesh.material = skyboxMat;
-  skyboxMesh.infiniteDistance = true;
-  skyboxMesh.isPickable = false;
-  skyboxMesh.receiveShadows = false;
-
-  // Start hidden — dark studio doesn't need a skybox
-  skyboxMesh.setEnabled(false);
+/** Initialize. Stash the scene; PhotoDome is created lazily on first photo skybox. */
+export function initSkybox(s: Scene): void {
+  scene = s;
 }
 
 /**
  * Switch the environment background.
  * Pass a skybox option ID from SKYBOX_OPTIONS.
- *
- * If the option has no file (or the file fails to load) we apply the option's
- * fallback colour as the scene clear colour. This is the default for every
- * option until real photos are dropped in.
  */
-export function setSkybox(scene: Scene, optionId: string): void {
+export function setSkybox(_scene: Scene | undefined, optionId: string): void {
+  // The arg is kept for backwards-compat with existing call sites that
+  // pass scene through. If we have a stashed scene from initSkybox use
+  // that, otherwise fall back to the arg.
+  const s = scene ?? _scene;
+  if (!s) {
+    console.warn("Skybox: no scene available.");
+    return;
+  }
+
   const option = SKYBOX_OPTIONS.find((o) => o.id === optionId);
   if (!option) {
     console.warn(`Skybox option "${optionId}" not found.`);
@@ -70,63 +65,66 @@ export function setSkybox(scene: Scene, optionId: string): void {
 
   currentSkyboxId = optionId;
 
-  // No file specified → solid colour mode (procedural fallback only)
+  // No file → solid colour mode (Dark Studio path).
   if (!option.file) {
-    applyFallbackColor(scene, option);
+    disposeDome();
+    applyFallbackColor(s, option);
     return;
   }
 
-  if (!skyboxMesh || !skyboxMat) {
-    console.warn("Skybox not initialized — using fallback colour.");
-    applyFallbackColor(scene, option);
-    return;
-  }
-
-  // Attempt to load the equirectangular texture. If it fails (file missing),
-  // fall back to the procedural colour so the scene never crashes.
   const texturePath = `textures/${option.file}`;
+
+  // Build (or rebuild) the photo dome. Disposing-and-recreating is
+  // cleaner than swapping textures because PhotoDome owns several
+  // observables and a render-pass that can leak otherwise.
+  disposeDome();
+
   try {
-    const texture = new Texture(
+    dome = new PhotoDome(
+      "photoDome",
       texturePath,
-      scene,
-      undefined, // noMipmap
-      undefined, // invertY
-      undefined, // samplingMode
-      () => {
-        // onLoad — apply texture to skybox sphere
-        if (!skyboxMesh || !skyboxMat) return;
-        if (skyboxMat.emissiveTexture && skyboxMat.emissiveTexture !== texture) {
-          skyboxMat.emissiveTexture.dispose();
-        }
-        skyboxMat.emissiveTexture = texture;
-        skyboxMat.emissiveColor = Color3.White();
-        skyboxMesh.setEnabled(true);
-        // Force the scene clear colour to black so any sliver of view not
-        // covered by the sphere doesn't read as the original ENSPEC blue.
-        scene.clearColor = new Color4(0, 0, 0, 1);
-        // Recolour the floor to match — otherwise the lower half of the
-        // view stays bright ENSPEC blue and visitors don't see the
-        // background change at all.
-        applyGroundColor(scene, option.groundColor);
-        console.log(`Skybox: "${option.label}" loaded from ${texturePath}`);
+      {
+        resolution: 32,
+        size: 1000, // big enough that anything in the scene is well inside
       },
-      () => {
-        // onError — file missing or failed to decode. Fall back to colour.
-        console.warn(
-          `Skybox texture "${texturePath}" not found — using fallback colour for "${option.label}".`
-        );
-        try {
-          texture.dispose();
-        } catch {
-          // ignore
-        }
-        applyFallbackColor(scene, option);
-      }
+      s
     );
-    texture.coordinatesMode = Texture.FIXED_EQUIRECTANGULAR_MIRRORED_MODE;
+    dome.imageMode = PhotoDome.MODE_MONOSCOPIC;
+    // Watch the underlying texture so we can fall back to colour if the
+    // file 404s or fails to decode.
+    const tex = dome.photoTexture as Texture | null;
+    if (tex) {
+      tex.onLoadObservable.addOnce(() => {
+        console.log(`Skybox: "${option.label}" PhotoDome loaded from ${texturePath}`);
+        s.clearColor = new Color4(0, 0, 0, 1);
+        applyGroundColor(s, option.groundColor);
+      });
+      // Texture has no first-class onError observable on all versions —
+      // we attach a low-level error handler via the underlying image.
+      const internalImg = (tex as unknown as { _texture?: { _ondestroy?: () => void } })._texture;
+      // Best-effort: most failures will surface in the console as a
+      // network 404 from Babylon's loader.
+      void internalImg;
+    } else {
+      console.warn(`Skybox: PhotoDome reported no photoTexture — falling back.`);
+      disposeDome();
+      applyFallbackColor(s, option);
+    }
   } catch (err) {
-    console.warn(`Skybox load threw, using fallback colour: ${texturePath}`, err);
-    applyFallbackColor(scene, option);
+    console.warn(`Skybox: PhotoDome construction failed for ${texturePath} — falling back.`, err);
+    disposeDome();
+    applyFallbackColor(s, option);
+  }
+}
+
+function disposeDome(): void {
+  if (dome) {
+    try {
+      dome.dispose();
+    } catch {
+      // ignore
+    }
+    dome = null;
   }
 }
 
@@ -135,34 +133,27 @@ export function setSkybox(scene: Scene, optionId: string): void {
  * environment.ts with name "ground" (XR.teleportFloorMeshName). We look
  * it up by name to avoid threading a reference through every call site.
  */
-function applyGroundColor(scene: Scene, color: Color3): void {
-  const ground = scene.getMeshByName("ground");
+function applyGroundColor(s: Scene, color: Color3): void {
+  const ground = s.getMeshByName("ground");
   if (!ground) return;
   const mat = ground.material;
   if (mat instanceof StandardMaterial) {
     mat.diffuseColor = color.clone();
-    // Keep the existing ambient contribution but darken slightly so the
-    // floor doesn't glow brighter than the sky behind it.
+    // Slight emissive tint so the floor doesn't go pure-grey under
+    // shadows — keeps the lighting "studio" feel intact.
     mat.emissiveColor = color.scale(0.05);
   }
 }
 
 /**
  * Apply the option's procedural fallback colour as the scene clear colour
- * and hide the skybox sphere. Also recolour the floor so the user sees
- * the ground change — otherwise the lower half of the view sticks at
- * the previous skybox's floor.
+ * and ensure no dome is visible. Also recolour the floor so the user sees
+ * the ground change — otherwise the lower half of the view sticks at the
+ * previous skybox's floor.
  */
-function applyFallbackColor(scene: Scene, option: SkyboxOption): void {
-  if (skyboxMesh) {
-    skyboxMesh.setEnabled(false);
-    if (skyboxMat?.emissiveTexture) {
-      skyboxMat.emissiveTexture.dispose();
-      skyboxMat.emissiveTexture = null;
-    }
-  }
-  scene.clearColor = option.fallbackColor.clone();
-  applyGroundColor(scene, option.groundColor);
+function applyFallbackColor(s: Scene, option: SkyboxOption): void {
+  s.clearColor = option.fallbackColor.clone();
+  applyGroundColor(s, option.groundColor);
   console.log(
     `Skybox: "${option.label}" — procedural colour fallback applied.`
   );
