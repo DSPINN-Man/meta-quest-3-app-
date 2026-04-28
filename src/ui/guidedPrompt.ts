@@ -28,16 +28,19 @@ const VIEWER_Y_OFFSET = -0.1;
 export function initGuidedPrompt(scene: Scene): void {
   if (promptMesh || promptTexture) return;
 
+  // Bigger card geometry (was 2.0 × 0.9) so the longer Quick Tour story
+  // cards and the multi-line controller help card both fit without
+  // clipping. Texture resolution scales accordingly to stay sharp.
   promptMesh = MeshBuilder.CreatePlane(
     "guidedPromptPlane",
-    { width: 2.0, height: 0.9 },
+    { width: 2.2, height: 1.2 },
     scene
   );
   promptMesh.isPickable = false;
   promptMesh.setEnabled(false);
   attachToViewer(promptMesh);
 
-  promptTexture = AdvancedDynamicTexture.CreateForMesh(promptMesh, 1024, 480);
+  promptTexture = AdvancedDynamicTexture.CreateForMesh(promptMesh, 1100, 600);
 
   const bg = new Rectangle("guidedPromptBg");
   bg.width = 1;
@@ -72,11 +75,11 @@ export function initGuidedPrompt(scene: Scene): void {
 
   bodyBlock = new TextBlock("guidedPromptBody", "");
   bodyBlock.color = "rgba(225, 232, 240, 1)";
-  bodyBlock.fontSize = 24;
+  bodyBlock.fontSize = 22;
   bodyBlock.fontFamily = "system-ui, -apple-system, 'SF Pro Text', sans-serif";
   bodyBlock.textWrapping = true;
   bodyBlock.lineSpacing = "6px";
-  bodyBlock.height = "180px";
+  bodyBlock.height = "440px";
   bodyBlock.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
   stack.addControl(bodyBlock);
 
@@ -122,16 +125,29 @@ export function hideGuidedPrompt(): void {
   promptMesh.setEnabled(false);
 }
 
-/** Show the controls help card — dismissed by any button press */
+/**
+ * Show the controls help card — dismissed by any button press.
+ *
+ * Two columns: LEFT controller actions and RIGHT controller actions.
+ * Each row is button + what it does (the *effect*, not just the name)
+ * so a confused user knows what they're about to make happen.
+ */
 export function showHelpCard(): void {
   showGuidedPrompt(
-    "Controls",
-    "Left controller:   X = See Inside    Y = Explode\n" +
-    "Right controller:  A = Closer    B = Back    Grip = Reset\n" +
-    "Right stick = Walk around\n" +
-    "Left stick = Spin model\n" +
-    "Trigger = Click / interact\n" +
-    "Hold any button 3s = Show this card again",
+    "Controller Reference",
+    "LEFT CONTROLLER\n" +
+    "   X  →  See Inside  (fade the cabinet shell)\n" +
+    "   Y  →  Explode     (spread the subsystems apart)\n" +
+    "   Stick → Spin the model (turntable)\n" +
+    "\n" +
+    "RIGHT CONTROLLER\n" +
+    "   A  →  Step closer to the panel\n" +
+    "   B  →  Step back / close info card\n" +
+    "   Grip →  Reset everything\n" +
+    "   Stick → Walk around the model\n" +
+    "\n" +
+    "Trigger = click on dots / buttons\n" +
+    "Hold any button 3s = open this card again",
     "Press any button to dismiss"
   );
 }

@@ -26,6 +26,10 @@ interface HotspotMarker {
   data: HotspotData;
   sphere: Mesh;
   ring: Mesh;
+  /** Faint wide halo behind the inner ring — pulls the eye in busy scenes */
+  halo: Mesh;
+  /** Dark disc behind the sphere so cyan reads against bright skyboxes */
+  backing: Mesh;
   stem: Mesh;
   /** The mesh this hotspot is anchored to */
   targetMesh: AbstractMesh;
@@ -108,15 +112,35 @@ export function createHotspots(scene: Scene, modelInfo?: ModelInfo): void {
     sphere.receiveShadows = false;
     sphere.isPickable = true;
 
+    // ── Dark backing disc — kills bright skybox bleed-through ──
+    // A flat near-black disc placed BEHIND the sphere (slight offset)
+    // so the cyan sphere doesn't get washed out against the
+    // industrial / site / concrete photo skyboxes.
+    const backing = MeshBuilder.CreateDisc(
+      `hotspot_backing_${hotspot.id}`,
+      { radius: sphereRadius * 1.6, tessellation: 24 },
+      scene
+    );
+    backing.position = pos.clone();
+    backing.billboardMode = Mesh.BILLBOARDMODE_ALL;
+    const backingMat = new StandardMaterial(`backingMat_${hotspot.id}`, scene);
+    backingMat.diffuseColor = Color3.Black();
+    backingMat.emissiveColor = new Color3(0.04, 0.06, 0.09);
+    backingMat.specularColor = Color3.Black();
+    backingMat.alpha = 0.78;
+    backingMat.disableLighting = true;
+    backing.material = backingMat;
+    backing.isPickable = false;
+    backing.receiveShadows = false;
+    backing.renderingGroupId = 0;
+
     // ── Border ring — bright cyan outline for visibility ──────
-    // Thickness bumped (0.20 → 0.45) and colour switched from white to
-    // cyan so the markers pop against the panel and the various skybox
-    // backgrounds.
+    // Thicker (0.45 → 0.65) and brighter so markers read at distance.
     const ring = MeshBuilder.CreateTorus(
       `ring_${hotspot.id}`,
       {
         diameter: sphereRadius * 2.8,
-        thickness: sphereRadius * 0.45,
+        thickness: sphereRadius * 0.65,
         tessellation: 24,
       },
       scene
@@ -127,11 +151,33 @@ export function createHotspots(scene: Scene, modelInfo?: ModelInfo): void {
     ringMat.emissiveColor = new Color3(0.4, 0.95, 1.0);
     ringMat.diffuseColor = Color3.Black();
     ringMat.specularColor = Color3.Black();
-    ringMat.alpha = 0.7;
+    ringMat.alpha = 0.85;
     ringMat.disableLighting = true;
     ring.material = ringMat;
     ring.isPickable = false;
     ring.receiveShadows = false;
+
+    // ── Outer halo ring — soft 4× wide glow that pulls the eye ─
+    const halo = MeshBuilder.CreateTorus(
+      `halo_${hotspot.id}`,
+      {
+        diameter: sphereRadius * 4.0,
+        thickness: sphereRadius * 0.18,
+        tessellation: 28,
+      },
+      scene
+    );
+    halo.position = pos.clone();
+    halo.rotation.x = Math.PI / 2;
+    const haloMat = new StandardMaterial(`haloMat_${hotspot.id}`, scene);
+    haloMat.emissiveColor = new Color3(0.4, 0.95, 1.0);
+    haloMat.diffuseColor = Color3.Black();
+    haloMat.specularColor = Color3.Black();
+    haloMat.alpha = 0.22;
+    haloMat.disableLighting = true;
+    halo.material = haloMat;
+    halo.isPickable = false;
+    halo.receiveShadows = false;
 
     // ── Pulsing animation ─────────────────────────────────────
     createPulseAnimation(sphere, scene);
@@ -161,11 +207,23 @@ export function createHotspots(scene: Scene, modelInfo?: ModelInfo): void {
     stem.isPickable = false;
     stem.receiveShadows = false;
 
-    markers.push({ data: hotspot, sphere, ring, stem, targetMesh, yOffset: yOffset + boost, stemLength });
+    markers.push({
+      data: hotspot,
+      sphere,
+      ring,
+      halo,
+      backing,
+      stem,
+      targetMesh,
+      yOffset: yOffset + boost,
+      stemLength,
+    });
 
     // Start HIDDEN
     sphere.setEnabled(false);
     ring.setEnabled(false);
+    halo.setEnabled(false);
+    backing.setEnabled(false);
     stem.setEnabled(false);
   }
 
@@ -194,6 +252,17 @@ export function createHotspots(scene: Scene, modelInfo?: ModelInfo): void {
       m.ring.position.x = center.x;
       m.ring.position.y = py;
       m.ring.position.z = center.z;
+
+      // Halo (wider concentric ring) — same plane as the inner ring
+      m.halo.position.x = center.x;
+      m.halo.position.y = py;
+      m.halo.position.z = center.z;
+
+      // Backing disc — billboards toward viewer; sit it AT the sphere
+      // (slight depth bias handled by isPickable=false + render order).
+      m.backing.position.x = center.x;
+      m.backing.position.y = py;
+      m.backing.position.z = center.z;
 
       // Stem below sphere
       const sphereRadius = m.sphere.getBoundingInfo().boundingBox.extendSizeWorld.y;
@@ -255,8 +324,10 @@ function createPulseAnimation(sphere: Mesh, scene: Scene): void {
 /** Show all hotspot markers. */
 export function showHotspots(): void {
   for (const m of markers) {
+    m.backing.setEnabled(true);
     m.sphere.setEnabled(true);
     m.ring.setEnabled(true);
+    m.halo.setEnabled(true);
     m.stem.setEnabled(true);
   }
   visible = true;
@@ -265,8 +336,10 @@ export function showHotspots(): void {
 /** Hide all hotspot markers. */
 export function hideHotspots(): void {
   for (const m of markers) {
+    m.backing.setEnabled(false);
     m.sphere.setEnabled(false);
     m.ring.setEnabled(false);
+    m.halo.setEnabled(false);
     m.stem.setEnabled(false);
   }
   visible = false;

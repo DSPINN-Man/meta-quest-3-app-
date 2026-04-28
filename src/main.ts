@@ -367,11 +367,13 @@ async function main() {
     {
       title: "33kV Indian Queens Switchgear",
       body:
-        "Welcome to the ENSPEC Panos control panel.\n\n" +
-        "33kV switchgear — Indian Queens substation, Cornwall. " +
-        "Built for NGET (National Grid). Rated 3150A. " +
-        "This is real infrastructure — not a demo model.\n\n" +
-        "Let's learn the controls.",
+        "You're standing in front of a real piece of National Grid infrastructure.\n\n" +
+        "Indian Queens substation, Cornwall — operated by NGET. This 33kV " +
+        "switchgear assembly is rated for 3150A continuous current. Roughly " +
+        "1,500 homes' worth of power flows through these copper bars every second.\n\n" +
+        "You can't normally walk around live switchgear. In here you can. " +
+        "We'll learn the four controls — A, B, X, Y — and then you're free " +
+        "to inspect the cabinet inside-out.",
       footer: "Press A to begin",
       expect: "move_closer" as XRButtonAction,
     },

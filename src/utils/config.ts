@@ -132,7 +132,9 @@ export const HOTSPOTS: HotspotData[] = [
     title: "Cable Entry System",
     description:
       "This panel can grow without major works. IP65 gland plates accept new cable entries on-site — no modifications to the main chamber. EMC screening keeps interference out of control circuits. Future circuits are planned for; the infrastructure is already there.",
-    yBoost: 1.2,
+    // v4 frame_structure is taller — bumped from 1.2 → 2.0 so the dot
+    // floats clearly above the cabinet roof instead of being occluded.
+    yBoost: 2.0,
   },
 ];
 
@@ -210,7 +212,7 @@ export const SKYBOX_OPTIONS: SkyboxOption[] = [
   // TODO: replace with public/textures/skybox_industrial.jpg
   { id: "industrial", label: "Industrial Facility", file: "skybox_industrial.jpg", fallbackColor: new Color4(0.102, 0.082, 0.071, 1) }, // #1a1512 dark warm grey
   // TODO: replace with public/textures/skybox_showroom.jpg
-  { id: "showroom", label: "Exhibition Hall", file: "skybox_showroom.jpg", fallbackColor: new Color4(0.133, 0.141, 0.149, 1) }, // #222426 medium neutral grey
+  { id: "showroom", label: "Concrete Pavement", file: "skybox_showroom.jpg", fallbackColor: new Color4(0.133, 0.141, 0.149, 1) }, // #222426 medium neutral grey
   // TODO: replace with public/textures/skybox_site.jpg
   { id: "site", label: "Indian Queens Site", file: "skybox_site.jpg", fallbackColor: new Color4(0.067, 0.094, 0.125, 1) }, // #111820 deep blue-grey
 ];
