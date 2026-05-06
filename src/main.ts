@@ -460,39 +460,35 @@ async function main() {
   let finalCardDismissTimer: ReturnType<typeof setTimeout> | null = null;
   const tutorialSteps = [
     {
-      title: "33kV Indian Queens Switchgear",
+      title: "Indian Queens switchgear",
       body:
-        "You're standing in front of a real piece of National Grid infrastructure.\n\n" +
-        "Indian Queens substation, Cornwall — operated by NGET. This 33kV " +
-        "switchgear assembly is rated for 3150A continuous current. Roughly " +
-        "1,500 homes' worth of power flows through these copper bars every second.\n\n" +
-        "You can't normally walk around live switchgear. In here you can. " +
-        "We'll learn the four controls — A, B, X, Y — and then you're free " +
-        "to inspect the cabinet inside-out.",
+        "A real 33 kV cabinet, rebuilt for inspection.\n\n" +
+        "Use four controls to move, reveal, and separate the main assemblies. " +
+        "After that, you can inspect the cabinet freely.",
       footer: "Press A to begin",
       expect: "move_closer" as XRButtonAction,
     },
     {
       title: "Move Closer",
-      body: "You just moved closer to the panel.\n\nUse A to step closer and B to step back. Try pressing B now.",
+      body: "A moves you closer to the cabinet.\n\nB steps back or closes a panel.",
       footer: "Press B to step back",
       expect: "move_back" as XRButtonAction,
     },
     {
-      title: "Reveal The Interior",
-      body: "Now let's see inside the panel.\n\nPress X to fade away the outer shell and reveal the internal components.",
+      title: "See Inside",
+      body: "X fades the outer shell.\n\nUse it when you want the internal layout in view.",
       footer: "Press X on the left controller",
       expect: "toggle_interior" as XRButtonAction,
     },
     {
       title: "Exploded View",
-      body: "Now spread the components apart.\n\nPress Y to explode the view — each assembly slides out so you can inspect it individually.",
+      body: "Y separates the main assemblies.\n\nUse this view to read the cabinet one system at a time.",
       footer: "Press Y on the left controller",
       expect: "toggle_explode" as XRButtonAction,
     },
     {
-      title: "You're Ready!",
-      body: "Point at the glowing dots and click to inspect each part.\n\nUse the right stick to walk around and the left stick to spin the model.\n\nHold any button for 3 seconds to see controls again.",
+      title: "Explore",
+      body: "Click the glowing dots to inspect each part.\n\nRight stick walks around. Left stick spins the model.\n\nHold any button for 3 seconds to reopen controls.",
       footer: "Press any button to explore freely",
       expect: null,
     },

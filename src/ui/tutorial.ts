@@ -50,15 +50,15 @@ export function showTutorial(
     if (isVR) {
       tutorialMesh = MeshBuilder.CreatePlane(
         "tutorialPlane",
-        { width: 2.35, height: 1.18 },
+        { width: 1.86, height: 0.94 },
         scene
       );
       tutorialMesh.isPickable = false;
       attachToViewer(tutorialMesh, -1.65, -0.02);
       tutorialTexture = AdvancedDynamicTexture.CreateForMesh(
         tutorialMesh,
-        800,
-        400
+        1240,
+        628
       );
     } else {
       tutorialTexture = AdvancedDynamicTexture.CreateFullscreenUI(
@@ -71,38 +71,38 @@ export function showTutorial(
     // ── Container — fully opaque in VR so scene content behind ──
     // (e.g. revealed interior, exploded parts) never bleeds through.
     const bg = new Rectangle("tutBg");
-    bg.width = isVR ? 1 : "380px";
-    bg.height = isVR ? 1 : "240px";
-    bg.cornerRadius = isVR ? 20 : 16;
-    bg.thickness = isVR ? 2 : 0;
-    bg.color = isVR ? "rgba(0, 180, 220, 0.55)" : "transparent";
-    bg.background = isVR ? "rgb(6, 10, 18)" : "rgba(12, 12, 18, 0.72)";
+    bg.width = isVR ? 1 : "340px";
+    bg.height = isVR ? 1 : "218px";
+    bg.cornerRadius = isVR ? 18 : 14;
+    bg.thickness = 1;
+    bg.color = "rgba(32, 36, 40, 0.20)";
+    bg.background = "rgba(246, 244, 238, 0.94)";
     bg.verticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
-    bg.shadowColor = "rgba(0, 0, 0, 0.55)";
-    bg.shadowBlur = isVR ? 28 : 30;
-    bg.shadowOffsetY = isVR ? 6 : 4;
+    bg.shadowColor = "rgba(0, 0, 0, 0.22)";
+    bg.shadowBlur = isVR ? 18 : 22;
+    bg.shadowOffsetY = 4;
     tutorialTexture.addControl(bg);
 
     // ── Content ──────────────────────────────────────────
     const stack = new StackPanel("tutStack");
     stack.isVertical = true;
-    stack.paddingTopInPixels = isVR ? 40 : 32;
-    stack.paddingLeftInPixels = isVR ? 50 : 40;
-    stack.paddingRightInPixels = isVR ? 50 : 40;
+    stack.paddingTopInPixels = isVR ? 34 : 28;
+    stack.paddingLeftInPixels = isVR ? 42 : 34;
+    stack.paddingRightInPixels = isVR ? 42 : 34;
     bg.addControl(stack);
 
     // ── Instruction rows — clean two-line format ─────────
     const instructions = isVR
       ? [
-          { action: "A  Move Closer", hint: "Steps to the next hero view" },
-          { action: "B  Step Back", hint: "Returns to the wider overview" },
-          { action: "X  Reveal Interior", hint: "Toggle the cabinet shell" },
-          { action: "Y  Exploded View", hint: "Open the internals dramatically" },
-          { action: "Tap Glowing Points", hint: "Teleport to inspect each part" },
+          { action: "A", hint: "Move closer" },
+          { action: "B", hint: "Step back" },
+          { action: "X", hint: "See inside" },
+          { action: "Y", hint: "Exploded view" },
+          { action: "Trigger", hint: "Open a detail point" },
         ]
       : [
-          { action: "Drag", hint: "Orbit around the panel" },
-          { action: "Scroll", hint: "Move closer or farther" },
+          { action: "Drag", hint: "Orbit" },
+          { action: "Scroll", hint: "Move in or out" },
           { action: "D / E / R", hint: "Doors, explode, reset" },
         ];
 
@@ -110,25 +110,25 @@ export function showTutorial(
       const instr = instructions[i];
 
       const action = new TextBlock(`action_${i}`, instr.action);
-      action.color = "rgba(255, 255, 255, 0.92)";
-      action.fontSize = isVR ? 26 : 19;
-      action.fontWeight = "600";
+      action.color = "rgba(26, 28, 30, 1)";
+      action.fontSize = isVR ? 25 : 18;
+      action.fontWeight = "650";
       action.fontFamily = "system-ui, -apple-system, 'SF Pro Display', sans-serif";
-      action.height = isVR ? "38px" : "26px";
+      action.height = isVR ? "34px" : "25px";
       action.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
       stack.addControl(action);
 
       const hint = new TextBlock(`hint_${i}`, instr.hint);
-      hint.color = "rgba(180, 185, 195, 0.55)";
-      hint.fontSize = isVR ? 18 : 13;
+      hint.color = "rgba(74, 76, 78, 0.72)";
+      hint.fontSize = isVR ? 17 : 13;
       hint.fontFamily = "system-ui, -apple-system, 'SF Pro Text', sans-serif";
-      hint.height = isVR ? "28px" : "20px";
+      hint.height = isVR ? "26px" : "20px";
       hint.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
       stack.addControl(hint);
 
       if (i < instructions.length - 1) {
         const gap = new Rectangle(`gap_${i}`);
-        gap.height = isVR ? "18px" : "14px";
+        gap.height = isVR ? "14px" : "12px";
         gap.thickness = 0;
         gap.background = "transparent";
         stack.addControl(gap);
@@ -138,9 +138,9 @@ export function showTutorial(
     // ── Dismiss hint ────────────────────────────────────
     const dismiss = new TextBlock(
       "tutDismiss",
-      "press any button to continue"
+      "press any button"
     );
-    dismiss.color = "rgba(140, 145, 155, 0.35)";
+    dismiss.color = "rgba(94, 86, 68, 0.62)";
     dismiss.fontSize = isVR ? 16 : 11;
     dismiss.fontFamily = "system-ui, -apple-system, 'SF Pro Text', sans-serif";
     dismiss.paddingTopInPixels = isVR ? 28 : 20;

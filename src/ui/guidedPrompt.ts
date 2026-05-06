@@ -9,10 +9,8 @@ import {
 import { getXR } from "../interactions/xrSetup";
 
 /**
- * A simple stage prompt that sits in front of the visitor during the guided demo.
- * The mesh is kept PARENTED to the XR camera so it always tracks the viewer —
- * any scene changes behind it (revealing the interior, exploding, etc) never
- * affect its readability.
+ * Minimal prompt card that follows the XR camera during guided moments.
+ * Keep this quiet and compact so it supports the model instead of taking over.
  */
 
 let promptMesh: Mesh | null = null;
@@ -21,83 +19,72 @@ let titleBlock: TextBlock | null = null;
 let bodyBlock: TextBlock | null = null;
 let footerBlock: TextBlock | null = null;
 
-/** Fixed offset from the XR camera / viewer. */
-const VIEWER_Z_OFFSET = -1.8;
-const VIEWER_Y_OFFSET = -0.1;
+const VIEWER_Z_OFFSET = -1.75;
+const VIEWER_Y_OFFSET = -0.08;
 
 export function initGuidedPrompt(scene: Scene): void {
   if (promptMesh || promptTexture) return;
 
-  // Bigger card geometry (was 2.0 × 0.9) so the longer Quick Tour story
-  // cards and the multi-line controller help card both fit without
-  // clipping. Texture resolution scales accordingly to stay sharp.
   promptMesh = MeshBuilder.CreatePlane(
     "guidedPromptPlane",
-    { width: 2.2, height: 1.2 },
+    { width: 1.86, height: 0.94 },
     scene
   );
   promptMesh.isPickable = false;
   promptMesh.setEnabled(false);
   attachToViewer(promptMesh);
 
-  promptTexture = AdvancedDynamicTexture.CreateForMesh(promptMesh, 1100, 600);
+  promptTexture = AdvancedDynamicTexture.CreateForMesh(promptMesh, 1240, 628);
 
   const bg = new Rectangle("guidedPromptBg");
   bg.width = 1;
   bg.height = 1;
-  bg.cornerRadius = 28;
-  bg.thickness = 2;
-  bg.color = "rgba(0, 180, 220, 0.65)";
-  // Fully opaque so scene content behind (bright interior, exploded parts)
-  // never bleeds through and makes text unreadable.
-  bg.background = "rgb(6, 10, 18)";
-  bg.shadowColor = "rgba(0, 0, 0, 0.55)";
-  bg.shadowBlur = 28;
-  bg.shadowOffsetY = 6;
+  bg.cornerRadius = 18;
+  bg.thickness = 1;
+  bg.color = "rgba(32, 36, 40, 0.22)";
+  bg.background = "rgba(246, 244, 238, 0.96)";
+  bg.shadowColor = "rgba(0, 0, 0, 0.24)";
+  bg.shadowBlur = 18;
+  bg.shadowOffsetY = 4;
   promptTexture.addControl(bg);
 
   const stack = new StackPanel("guidedPromptStack");
   stack.isVertical = true;
-  stack.paddingTopInPixels = 30;
-  stack.paddingLeftInPixels = 44;
-  stack.paddingRightInPixels = 44;
-  stack.paddingBottomInPixels = 22;
+  stack.paddingTopInPixels = 34;
+  stack.paddingLeftInPixels = 42;
+  stack.paddingRightInPixels = 42;
+  stack.paddingBottomInPixels = 26;
   bg.addControl(stack);
 
   titleBlock = new TextBlock("guidedPromptTitle", "");
-  titleBlock.color = "rgba(255, 255, 255, 1)";
-  titleBlock.fontSize = 38;
-  titleBlock.fontWeight = "700";
+  titleBlock.color = "rgba(26, 28, 30, 1)";
+  titleBlock.fontSize = 31;
+  titleBlock.fontWeight = "650";
   titleBlock.fontFamily = "system-ui, -apple-system, 'SF Pro Display', sans-serif";
-  titleBlock.height = "56px";
+  titleBlock.height = "48px";
   titleBlock.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
   stack.addControl(titleBlock);
 
   bodyBlock = new TextBlock("guidedPromptBody", "");
-  bodyBlock.color = "rgba(225, 232, 240, 1)";
-  bodyBlock.fontSize = 22;
+  bodyBlock.color = "rgba(55, 58, 60, 1)";
+  bodyBlock.fontSize = 18;
   bodyBlock.fontFamily = "system-ui, -apple-system, 'SF Pro Text', sans-serif";
   bodyBlock.textWrapping = true;
-  bodyBlock.lineSpacing = "6px";
-  bodyBlock.height = "440px";
+  bodyBlock.lineSpacing = "5px";
+  bodyBlock.height = "404px";
   bodyBlock.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
   stack.addControl(bodyBlock);
 
   footerBlock = new TextBlock("guidedPromptFooter", "");
-  footerBlock.color = "rgba(130, 220, 255, 1)";
-  footerBlock.fontSize = 20;
+  footerBlock.color = "rgba(94, 86, 68, 1)";
+  footerBlock.fontSize = 16;
   footerBlock.fontWeight = "600";
   footerBlock.fontFamily = "system-ui, -apple-system, 'SF Pro Text', sans-serif";
-  footerBlock.height = "42px";
+  footerBlock.height = "34px";
   footerBlock.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
   stack.addControl(footerBlock);
 }
 
-/**
- * Re-attach the prompt to the (now available) XR camera.
- * Call this after the VR session has begun — the mesh may have
- * been created before XR was ready.
- */
 export function reparentGuidedPromptToXR(): void {
   if (!promptMesh) return;
   attachToViewer(promptMesh);
@@ -117,7 +104,9 @@ export function showGuidedPrompt(
   footerBlock.text = footer;
   attachToViewer(promptMesh);
   promptMesh.setEnabled(true);
-  console.log(`showGuidedPrompt: "${title}" — parent=${promptMesh.parent?.name ?? "none"}, enabled=${promptMesh.isEnabled()}, pos=(${promptMesh.position.x.toFixed(2)}, ${promptMesh.position.y.toFixed(2)}, ${promptMesh.position.z.toFixed(2)})`);
+  console.log(
+    `showGuidedPrompt: "${title}" parent=${promptMesh.parent?.name ?? "none"}, enabled=${promptMesh.isEnabled()}`
+  );
 }
 
 export function hideGuidedPrompt(): void {
@@ -125,30 +114,23 @@ export function hideGuidedPrompt(): void {
   promptMesh.setEnabled(false);
 }
 
-/**
- * Show the controls help card — dismissed by any button press.
- *
- * Two columns: LEFT controller actions and RIGHT controller actions.
- * Each row is button + what it does (the *effect*, not just the name)
- * so a confused user knows what they're about to make happen.
- */
 export function showHelpCard(): void {
   showGuidedPrompt(
-    "Controller Reference",
+    "Controller reference",
     "LEFT CONTROLLER\n" +
-    "   X  →  See Inside  (fade the cabinet shell)\n" +
-    "   Y  →  Explode     (spread the subsystems apart)\n" +
-    "   Stick → Spin the model (turntable)\n" +
+    "   X  =  See inside\n" +
+    "   Y  =  Exploded view\n" +
+    "   Stick  =  Spin model\n" +
     "\n" +
     "RIGHT CONTROLLER\n" +
-    "   A  →  Step closer to the panel\n" +
-    "   B  →  Step back / close info card\n" +
-    "   Grip →  Reset everything\n" +
-    "   Stick → Walk around the model\n" +
+    "   A  =  Step closer\n" +
+    "   B  =  Step back\n" +
+    "   Grip  =  Reset\n" +
+    "   Stick  =  Walk around\n" +
     "\n" +
-    "Trigger = click on dots / buttons\n" +
-    "Hold any button 3s = open this card again",
-    "Press any button to dismiss"
+    "Trigger = click dots and buttons\n" +
+    "Hold any button for 3s to reopen this",
+    "Press any button"
   );
 }
 
@@ -156,16 +138,7 @@ export function isGuidedPromptVisible(): boolean {
   return promptMesh?.isEnabled() ?? false;
 }
 
-/**
- * Briefly recolour the current prompt card to green and replace the title
- * with a "✓ Got it!" confirmation. Auto-restores after ~800ms so the next
- * step transitions cleanly afterwards.
- *
- * Intended for the guided tutorial: when the user presses the correct
- * button, fire this *before* advancing to the next card so the user gets
- * positive feedback that they did the right thing.
- */
-export function showSuccessFeedback(message: string = "✓ Got it!"): void {
+export function showSuccessFeedback(message: string = "Got it"): void {
   if (!promptMesh || !titleBlock) return;
   if (!promptMesh.isEnabled()) return;
 
@@ -173,16 +146,14 @@ export function showSuccessFeedback(message: string = "✓ Got it!"): void {
   const originalTitleColor = titleBlock.color;
 
   titleBlock.text = message;
-  titleBlock.color = "rgba(120, 240, 160, 1)";
+  titleBlock.color = "rgba(48, 118, 88, 1)";
 
   setTimeout(() => {
-    // Only restore if our message is still visible — if a new step has
-    // already been rendered, leave it alone.
     if (titleBlock && titleBlock.text === message) {
       titleBlock.text = originalTitle;
       titleBlock.color = originalTitleColor;
     }
-  }, 800);
+  }, 700);
 }
 
 function attachToViewer(mesh: Mesh): void {

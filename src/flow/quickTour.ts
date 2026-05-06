@@ -2,28 +2,6 @@ import { Scene } from "@babylonjs/core";
 import { showGuidedPrompt, hideGuidedPrompt } from "../ui/guidedPrompt";
 import { setSpectatorStatus } from "../ui/spectatorOverlay";
 
-/**
- * Quick Tour — a fully scripted ~90 second showcase the visitor can sit
- * back and watch. No button presses required. The system runs each
- * action automatically with a narration card on the prompt panel.
- *
- * Structured as a four-act engineer story:
- *   Act 1 — Why This Panel Exists (the problem)
- *   Act 2 — The Engineering Challenge (what's needed)
- *   Act 3 — Inside The Cabinet (how each subsystem solves a piece)
- *   Act 4 — Why It Matters (the operational outcome)
- *
- * Timeline (absolute seconds from tour start):
- *    0s  Act 1 — problem framing card
- *    8s  Act 2 — moveCloser() + challenge card
- *   18s  Act 3 — revealInterior() + inside card
- *   35s  Act 3 (cont) — explode() + per-subsystem breakdown
- *   65s  Act 4 — outcome / why-it-matters card
- *   90s  reset() + "Now Explore" hand-off
- *
- * Actions are injected from main.ts since they depend on scene state.
- */
-
 export interface QuickTourActions {
   moveCloser: () => Promise<void> | void;
   revealInterior: () => Promise<void> | void;
@@ -32,30 +10,17 @@ export interface QuickTourActions {
 }
 
 interface ScheduleEntry {
-  /** Time in seconds from tour start when this entry fires */
   at: number;
-  /** Function to run at that time */
   run: () => Promise<void> | void;
 }
 
-/**
- * State for the currently-running tour, exposed so that input handlers
- * (e.g. right grip → "skip ahead") can poke the schedule without having
- * to plumb extra arguments through every caller.
- */
 let activeTourSkipFlag = false;
 let tourActive = false;
 
-/** True while a Quick Tour is currently running. */
 export function isQuickTourActive(): boolean {
   return tourActive;
 }
 
-/**
- * Skip the rest of the current act and jump straight to the next.
- * No-op if a tour isn't running. The wait-loop inside runQuickTour
- * polls this flag and breaks early when set.
- */
 export function skipQuickTourAct(): void {
   if (tourActive) activeTourSkipFlag = true;
 }
@@ -64,52 +29,43 @@ export async function runQuickTour(
   _scene: Scene,
   actions: QuickTourActions
 ): Promise<void> {
+  if (tourActive) return;
+
   tourActive = true;
   activeTourSkipFlag = false;
-  // ── ACT 1 — The Problem ────────────────────────────────────
-  // Open with the stakes, not the spec sheet. An engineer cares about
-  // *why* the panel exists before *what's* inside it.
+
   showGuidedPrompt(
-    "Act 1 — Why This Panel Exists",
-    "Cornwall, England. 1,500 homes need stable 33kV power, around the " +
-    "clock, in every weather. A single fault — a lightning strike, a " +
-    "failing cable, a surge — and the lights go out for thousands.\n\n" +
-    "The Indian Queens substation can't go down. So how do you protect " +
-    "an entire region's grid feed?",
-    "Quick Tour starting..."
+    "Why this cabinet exists",
+    "A 33 kV feed supports around 1,500 homes from Indian Queens.\n\n" +
+    "This cabinet keeps that supply stable when faults, surges, or weather hit the network.",
+    "Starting tour"
   );
-  setSpectatorStatus("Quick Tour", "Act 1 — Why this panel exists");
+  setSpectatorStatus("Quick Tour", "Why this cabinet exists");
 
   const schedule: ScheduleEntry[] = [
-    // ── ACT 2 — The Engineering Challenge ──────────────────────
     {
       at: 8,
       run: async () => {
         showGuidedPrompt(
-          "Act 2 — The Engineering Challenge",
-          "You build a 33kV switchgear cabinet rated for 3150A continuous " +
-          "current. It carries the live grid feed, monitors every circuit " +
-          "in microseconds, and trips faults before damage spreads.\n\n" +
-          "Let's get closer and see what that actually looks like.",
-          "Moving in..."
+          "Rated for real load",
+          "The assembly is built for 3150 A continuous current.\n\n" +
+          "It carries the feed, watches each circuit, and trips fast when something moves out of range.",
+          "Moving closer"
         );
-        setSpectatorStatus("Quick Tour", "Act 2 — Engineering challenge");
+        setSpectatorStatus("Quick Tour", "Rated for real load");
         await actions.moveCloser();
       },
     },
-    // ── ACT 3 — Inside The Cabinet ─────────────────────────────
     {
       at: 18,
       run: async () => {
         showGuidedPrompt(
-          "Act 3 — Inside The Cabinet",
-          "The shell fades away. Now you can see what the operator never " +
-          "sees on-site: live copper busbars, the capacitor bank, segregated " +
-          "cable routing, and the protection rail that decides who gets " +
-          "power and who doesn't.",
-          "Revealing internals..."
+          "Inside the cabinet",
+          "The outer shell fades so the working layout is visible:\n\n" +
+          "busbars, capacitor bank, cable routes, and protection rail.",
+          "Opening view"
         );
-        setSpectatorStatus("Quick Tour", "Act 3 — Inside the cabinet");
+        setSpectatorStatus("Quick Tour", "Inside the cabinet");
         await actions.revealInterior();
       },
     },
@@ -117,34 +73,29 @@ export async function runQuickTour(
       at: 35,
       run: async () => {
         showGuidedPrompt(
-          "Each Subsystem, In Isolation",
-          "Subsystems separate so you can see how each one solves a piece " +
-          "of the problem:\n\n" +
-          "• Busbars — 3150A backbone, every circuit feeds from here\n" +
-          "• Capacitor bank — corrects power factor, saves grid penalty fees\n" +
-          "• Cable management — fire-barriered, BS 7671 compliant\n" +
-          "• Protection rail — relays, MCBs, PLC I/O linked to NGET SCADA",
-          "Spreading components apart..."
+          "Subsystems",
+          "Busbars carry the main current.\n" +
+          "Capacitors correct power factor.\n" +
+          "Cable routes keep circuits separated.\n" +
+          "Protection gear links the cabinet to SCADA.",
+          "Exploded view"
         );
-        setSpectatorStatus("Quick Tour", "Act 3 — Each subsystem in isolation");
+        setSpectatorStatus("Quick Tour", "Subsystems");
         await actions.explode();
       },
     },
-    // ── ACT 4 — Why It Matters ─────────────────────────────────
     {
       at: 65,
       run: () => {
         showGuidedPrompt(
-          "Act 4 — Why It Matters",
-          "Every choice in this cabinet earns its place:\n\n" +
-          "• Tin-plated copper — decades of conductivity without oxidation\n" +
-          "• IP65 cable entries — site can grow without main-chamber rework\n" +
-          "• Modular DIN rails — maintenance teams swap parts in minutes\n" +
-          "• SCADA-linked protection — National Grid sees faults instantly\n\n" +
-          "This is what reliable infrastructure looks like up close.",
-          "Reading time..."
+          "Built to stay online",
+          "Tin-plated copper resists oxidation.\n" +
+          "IP65 entries protect the cable chamber.\n" +
+          "Modular rails make service faster.\n" +
+          "SCADA visibility helps teams react early.",
+          "Final note"
         );
-        setSpectatorStatus("Quick Tour", "Act 4 — Why it matters");
+        setSpectatorStatus("Quick Tour", "Built to stay online");
       },
     },
     {
@@ -152,20 +103,16 @@ export async function runQuickTour(
       run: async () => {
         await actions.reset();
         showGuidedPrompt(
-          "Now Explore",
-          "Tour complete. The cabinet is yours to inspect.\n\n" +
-          "Right stick = walk around. Left stick = spin the model. " +
-          "Point at the glowing dots and click to read each subsystem in " +
-          "detail. Hold any button for 3 seconds to see controls again.",
+          "Explore",
+          "Right stick walks around.\n" +
+          "Left stick spins the model.\n" +
+          "Click the glowing dots to inspect each subsystem.",
           "You have control"
         );
       },
     },
   ];
 
-  // Run the schedule in absolute time. The wait between each entry is
-  // pollable in 200ms slices so a right-grip skip can break out of the
-  // current wait early and jump to the next act.
   const startTime = performance.now();
   for (const entry of schedule) {
     const targetMs = entry.at * 1000;
@@ -181,7 +128,6 @@ export async function runQuickTour(
     }
   }
 
-  // Hold the final card for a few seconds (also skippable), then hide.
   const finalHoldMs = 6000;
   const finalStart = performance.now();
   while (performance.now() - finalStart < finalHoldMs) {
