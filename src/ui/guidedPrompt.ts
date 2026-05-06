@@ -27,60 +27,60 @@ export function initGuidedPrompt(scene: Scene): void {
 
   promptMesh = MeshBuilder.CreatePlane(
     "guidedPromptPlane",
-    { width: 1.86, height: 0.94 },
+    { width: 1.5, height: 0.58 },
     scene
   );
   promptMesh.isPickable = false;
   promptMesh.setEnabled(false);
   attachToViewer(promptMesh);
 
-  promptTexture = AdvancedDynamicTexture.CreateForMesh(promptMesh, 1240, 628);
+  promptTexture = AdvancedDynamicTexture.CreateForMesh(promptMesh, 1040, 408);
 
   const bg = new Rectangle("guidedPromptBg");
   bg.width = 1;
   bg.height = 1;
-  bg.cornerRadius = 18;
+  bg.cornerRadius = 15;
   bg.thickness = 1;
   bg.color = "rgba(32, 36, 40, 0.22)";
   bg.background = "rgba(246, 244, 238, 0.96)";
   bg.shadowColor = "rgba(0, 0, 0, 0.24)";
-  bg.shadowBlur = 18;
+  bg.shadowBlur = 14;
   bg.shadowOffsetY = 4;
   promptTexture.addControl(bg);
 
   const stack = new StackPanel("guidedPromptStack");
   stack.isVertical = true;
-  stack.paddingTopInPixels = 34;
-  stack.paddingLeftInPixels = 42;
-  stack.paddingRightInPixels = 42;
-  stack.paddingBottomInPixels = 26;
+  stack.paddingTopInPixels = 26;
+  stack.paddingLeftInPixels = 34;
+  stack.paddingRightInPixels = 34;
+  stack.paddingBottomInPixels = 20;
   bg.addControl(stack);
 
   titleBlock = new TextBlock("guidedPromptTitle", "");
   titleBlock.color = "rgba(26, 28, 30, 1)";
-  titleBlock.fontSize = 31;
+  titleBlock.fontSize = 28;
   titleBlock.fontWeight = "650";
   titleBlock.fontFamily = "system-ui, -apple-system, 'SF Pro Display', sans-serif";
-  titleBlock.height = "48px";
+  titleBlock.height = "40px";
   titleBlock.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
   stack.addControl(titleBlock);
 
   bodyBlock = new TextBlock("guidedPromptBody", "");
   bodyBlock.color = "rgba(55, 58, 60, 1)";
-  bodyBlock.fontSize = 18;
+  bodyBlock.fontSize = 16;
   bodyBlock.fontFamily = "system-ui, -apple-system, 'SF Pro Text', sans-serif";
   bodyBlock.textWrapping = true;
-  bodyBlock.lineSpacing = "5px";
-  bodyBlock.height = "404px";
+  bodyBlock.lineSpacing = "4px";
+  bodyBlock.height = "250px";
   bodyBlock.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
   stack.addControl(bodyBlock);
 
   footerBlock = new TextBlock("guidedPromptFooter", "");
   footerBlock.color = "rgba(94, 86, 68, 1)";
-  footerBlock.fontSize = 16;
+  footerBlock.fontSize = 14;
   footerBlock.fontWeight = "600";
   footerBlock.fontFamily = "system-ui, -apple-system, 'SF Pro Text', sans-serif";
-  footerBlock.height = "34px";
+  footerBlock.height = "28px";
   footerBlock.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
   stack.addControl(footerBlock);
 }
@@ -117,19 +117,9 @@ export function hideGuidedPrompt(): void {
 export function showHelpCard(): void {
   showGuidedPrompt(
     "Controller reference",
-    "LEFT CONTROLLER\n" +
-    "   X  =  See inside\n" +
-    "   Y  =  Exploded view\n" +
-    "   Stick  =  Spin model\n" +
-    "\n" +
-    "RIGHT CONTROLLER\n" +
-    "   A  =  Step closer\n" +
-    "   B  =  Step back\n" +
-    "   Grip  =  Reset\n" +
-    "   Stick  =  Walk around\n" +
-    "\n" +
-    "Trigger = click dots and buttons\n" +
-    "Hold any button for 3s to reopen this",
+    "Left: X inside, Y exploded, stick spins.\n" +
+    "Right: A closer, B back, grip resets.\n" +
+    "Trigger opens dots. Hold any button for controls.",
     "Press any button"
   );
 }

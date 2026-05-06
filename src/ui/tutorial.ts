@@ -50,15 +50,15 @@ export function showTutorial(
     if (isVR) {
       tutorialMesh = MeshBuilder.CreatePlane(
         "tutorialPlane",
-        { width: 1.86, height: 0.94 },
+        { width: 1.48, height: 0.72 },
         scene
       );
       tutorialMesh.isPickable = false;
       attachToViewer(tutorialMesh, -1.65, -0.02);
       tutorialTexture = AdvancedDynamicTexture.CreateForMesh(
         tutorialMesh,
-        1240,
-        628
+        1040,
+        504
       );
     } else {
       tutorialTexture = AdvancedDynamicTexture.CreateFullscreenUI(
@@ -71,24 +71,24 @@ export function showTutorial(
     // ── Container — fully opaque in VR so scene content behind ──
     // (e.g. revealed interior, exploded parts) never bleeds through.
     const bg = new Rectangle("tutBg");
-    bg.width = isVR ? 1 : "340px";
-    bg.height = isVR ? 1 : "218px";
-    bg.cornerRadius = isVR ? 18 : 14;
+    bg.width = isVR ? 1 : "292px";
+    bg.height = isVR ? 1 : "172px";
+    bg.cornerRadius = isVR ? 15 : 12;
     bg.thickness = 1;
     bg.color = "rgba(32, 36, 40, 0.20)";
     bg.background = "rgba(246, 244, 238, 0.94)";
     bg.verticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
     bg.shadowColor = "rgba(0, 0, 0, 0.22)";
-    bg.shadowBlur = isVR ? 18 : 22;
+    bg.shadowBlur = isVR ? 14 : 16;
     bg.shadowOffsetY = 4;
     tutorialTexture.addControl(bg);
 
     // ── Content ──────────────────────────────────────────
     const stack = new StackPanel("tutStack");
     stack.isVertical = true;
-    stack.paddingTopInPixels = isVR ? 34 : 28;
-    stack.paddingLeftInPixels = isVR ? 42 : 34;
-    stack.paddingRightInPixels = isVR ? 42 : 34;
+    stack.paddingTopInPixels = isVR ? 28 : 22;
+    stack.paddingLeftInPixels = isVR ? 34 : 28;
+    stack.paddingRightInPixels = isVR ? 34 : 28;
     bg.addControl(stack);
 
     // ── Instruction rows — clean two-line format ─────────
@@ -111,24 +111,24 @@ export function showTutorial(
 
       const action = new TextBlock(`action_${i}`, instr.action);
       action.color = "rgba(26, 28, 30, 1)";
-      action.fontSize = isVR ? 25 : 18;
+      action.fontSize = isVR ? 22 : 16;
       action.fontWeight = "650";
       action.fontFamily = "system-ui, -apple-system, 'SF Pro Display', sans-serif";
-      action.height = isVR ? "34px" : "25px";
+      action.height = isVR ? "30px" : "22px";
       action.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
       stack.addControl(action);
 
       const hint = new TextBlock(`hint_${i}`, instr.hint);
       hint.color = "rgba(74, 76, 78, 0.72)";
-      hint.fontSize = isVR ? 17 : 13;
+      hint.fontSize = isVR ? 15 : 12;
       hint.fontFamily = "system-ui, -apple-system, 'SF Pro Text', sans-serif";
-      hint.height = isVR ? "26px" : "20px";
+      hint.height = isVR ? "22px" : "18px";
       hint.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
       stack.addControl(hint);
 
       if (i < instructions.length - 1) {
         const gap = new Rectangle(`gap_${i}`);
-        gap.height = isVR ? "14px" : "12px";
+        gap.height = isVR ? "10px" : "8px";
         gap.thickness = 0;
         gap.background = "transparent";
         stack.addControl(gap);
@@ -141,10 +141,10 @@ export function showTutorial(
       "press any button"
     );
     dismiss.color = "rgba(94, 86, 68, 0.62)";
-    dismiss.fontSize = isVR ? 16 : 11;
+    dismiss.fontSize = isVR ? 14 : 10;
     dismiss.fontFamily = "system-ui, -apple-system, 'SF Pro Text', sans-serif";
-    dismiss.paddingTopInPixels = isVR ? 28 : 20;
-    dismiss.height = isVR ? "44px" : "32px";
+    dismiss.paddingTopInPixels = isVR ? 18 : 12;
+    dismiss.height = isVR ? "30px" : "22px";
     dismiss.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
     stack.addControl(dismiss);
 
