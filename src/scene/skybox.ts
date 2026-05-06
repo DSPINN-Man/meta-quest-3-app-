@@ -34,7 +34,7 @@ import { SKYBOX_OPTIONS, type SkyboxOption } from "../utils/config";
  */
 
 let dome: PhotoDome | null = null;
-let currentSkyboxId = "dark_studio";
+let currentSkyboxId = "plant_room";
 let scene: Scene | null = null;
 
 /** Initialize. Stash the scene; PhotoDome is created lazily on first photo skybox. */

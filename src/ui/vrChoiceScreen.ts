@@ -33,7 +33,7 @@ let activeMeshes: Mesh[] = [];
 
 export function showVRChoiceScreen(scene: Scene): Promise<VRChoices> {
   return new Promise((resolve) => {
-    const choices: VRChoices = { mode: "full", skyboxId: "dark_studio" };
+    const choices: VRChoices = { mode: "full", skyboxId: "plant_room" };
 
     showModePicker(scene, (mode) => {
       choices.mode = mode;
