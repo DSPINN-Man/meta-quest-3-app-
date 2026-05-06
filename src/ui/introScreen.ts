@@ -11,6 +11,7 @@ import {
   Control,
 } from "@babylonjs/gui";
 import { getXR } from "../interactions/xrSetup";
+import { PANEL, styleBody, stylePanel, styleTitle } from "./panelTheme";
 
 /**
  * Desktop keeps the ENSPEC intro video.
@@ -128,13 +129,7 @@ function showVRIntro(scene: Scene): void {
   const bg = new Rectangle("introBg");
   bg.width = 1;
   bg.height = 1;
-  bg.cornerRadius = 34;
-  bg.thickness = 2;
-  bg.color = "rgba(255,255,255,0.28)";
-  bg.background = "rgba(9, 20, 28, 0.78)";
-  bg.shadowColor = "rgba(0,0,0,0.30)";
-  bg.shadowBlur = 24;
-  bg.shadowOffsetY = 4;
+  stylePanel(bg, 24, 18);
   introTexture.addControl(bg);
 
   const stack = new StackPanel("introStack");
@@ -145,18 +140,14 @@ function showVRIntro(scene: Scene): void {
   bg.addControl(stack);
 
   const brand = new TextBlock("introBrand", "ENSPEC");
-  brand.color = "rgba(255,255,255,0.97)";
-  brand.fontSize = 76;
-  brand.fontWeight = "700";
-  brand.fontFamily = "system-ui, -apple-system, 'SF Pro Display', sans-serif";
+  styleTitle(brand, 76);
   brand.height = "90px";
   brand.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
   stack.addControl(brand);
 
   const title = new TextBlock("introTitle", "Interactive Product Showcase");
-  title.color = "rgba(212, 238, 244, 0.95)";
-  title.fontSize = 34;
-  title.fontFamily = "system-ui, -apple-system, 'SF Pro Text', sans-serif";
+  styleBody(title, 34);
+  title.color = PANEL.text;
   title.height = "54px";
   title.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
   stack.addControl(title);
@@ -166,8 +157,8 @@ function showVRIntro(scene: Scene): void {
     "A guided Meta Quest 3 experience"
   );
   subtitle.color = "rgba(135, 218, 235, 0.92)";
-  subtitle.fontSize = 26;
-  subtitle.fontFamily = "system-ui, -apple-system, 'SF Pro Text', sans-serif";
+  styleBody(subtitle, 26);
+  subtitle.color = PANEL.faint;
   subtitle.height = "44px";
   subtitle.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
   stack.addControl(subtitle);

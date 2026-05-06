@@ -7,6 +7,7 @@ import {
   Control,
 } from "@babylonjs/gui";
 import { getXR } from "../interactions/xrSetup";
+import { PANEL, styleBody, styleFooter, stylePanel, styleTitle } from "./panelTheme";
 
 /**
  * Minimal prompt card that follows the XR camera during guided moments.
@@ -39,13 +40,7 @@ export function initGuidedPrompt(scene: Scene): void {
   const bg = new Rectangle("guidedPromptBg");
   bg.width = 1;
   bg.height = 1;
-  bg.cornerRadius = 15;
-  bg.thickness = 1;
-  bg.color = "rgba(32, 36, 40, 0.22)";
-  bg.background = "rgba(246, 244, 238, 0.96)";
-  bg.shadowColor = "rgba(0, 0, 0, 0.24)";
-  bg.shadowBlur = 14;
-  bg.shadowOffsetY = 4;
+  stylePanel(bg);
   promptTexture.addControl(bg);
 
   const stack = new StackPanel("guidedPromptStack");
@@ -57,18 +52,13 @@ export function initGuidedPrompt(scene: Scene): void {
   bg.addControl(stack);
 
   titleBlock = new TextBlock("guidedPromptTitle", "");
-  titleBlock.color = "rgba(26, 28, 30, 1)";
-  titleBlock.fontSize = 28;
-  titleBlock.fontWeight = "650";
-  titleBlock.fontFamily = "system-ui, -apple-system, 'SF Pro Display', sans-serif";
+  styleTitle(titleBlock);
   titleBlock.height = "40px";
   titleBlock.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
   stack.addControl(titleBlock);
 
   bodyBlock = new TextBlock("guidedPromptBody", "");
-  bodyBlock.color = "rgba(55, 58, 60, 1)";
-  bodyBlock.fontSize = 16;
-  bodyBlock.fontFamily = "system-ui, -apple-system, 'SF Pro Text', sans-serif";
+  styleBody(bodyBlock);
   bodyBlock.textWrapping = true;
   bodyBlock.lineSpacing = "4px";
   bodyBlock.height = "250px";
@@ -76,10 +66,7 @@ export function initGuidedPrompt(scene: Scene): void {
   stack.addControl(bodyBlock);
 
   footerBlock = new TextBlock("guidedPromptFooter", "");
-  footerBlock.color = "rgba(94, 86, 68, 1)";
-  footerBlock.fontSize = 14;
-  footerBlock.fontWeight = "600";
-  footerBlock.fontFamily = "system-ui, -apple-system, 'SF Pro Text', sans-serif";
+  styleFooter(footerBlock);
   footerBlock.height = "28px";
   footerBlock.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
   stack.addControl(footerBlock);
@@ -136,7 +123,7 @@ export function showSuccessFeedback(message: string = "Got it"): void {
   const originalTitleColor = titleBlock.color;
 
   titleBlock.text = message;
-  titleBlock.color = "rgba(48, 118, 88, 1)";
+  titleBlock.color = PANEL.success;
 
   setTimeout(() => {
     if (titleBlock && titleBlock.text === message) {

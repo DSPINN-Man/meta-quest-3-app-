@@ -12,6 +12,7 @@ import {
   Control,
 } from "@babylonjs/gui";
 import { getXR, onXRInput } from "../interactions/xrSetup";
+import { PANEL, styleBody, styleFooter, stylePanel, styleTitle } from "./panelTheme";
 
 /**
  * Minimal tutorial overlay — clean, typographic, Apple-like.
@@ -73,14 +74,8 @@ export function showTutorial(
     const bg = new Rectangle("tutBg");
     bg.width = isVR ? 1 : "292px";
     bg.height = isVR ? 1 : "172px";
-    bg.cornerRadius = isVR ? 15 : 12;
-    bg.thickness = 1;
-    bg.color = "rgba(32, 36, 40, 0.20)";
-    bg.background = "rgba(246, 244, 238, 0.94)";
+    stylePanel(bg, isVR ? 15 : 12, isVR ? 14 : 16);
     bg.verticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
-    bg.shadowColor = "rgba(0, 0, 0, 0.22)";
-    bg.shadowBlur = isVR ? 14 : 16;
-    bg.shadowOffsetY = 4;
     tutorialTexture.addControl(bg);
 
     // ── Content ──────────────────────────────────────────
@@ -110,18 +105,13 @@ export function showTutorial(
       const instr = instructions[i];
 
       const action = new TextBlock(`action_${i}`, instr.action);
-      action.color = "rgba(26, 28, 30, 1)";
-      action.fontSize = isVR ? 22 : 16;
-      action.fontWeight = "650";
-      action.fontFamily = "system-ui, -apple-system, 'SF Pro Display', sans-serif";
+      styleTitle(action, isVR ? 22 : 16);
       action.height = isVR ? "30px" : "22px";
       action.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
       stack.addControl(action);
 
       const hint = new TextBlock(`hint_${i}`, instr.hint);
-      hint.color = "rgba(74, 76, 78, 0.72)";
-      hint.fontSize = isVR ? 15 : 12;
-      hint.fontFamily = "system-ui, -apple-system, 'SF Pro Text', sans-serif";
+      styleBody(hint, isVR ? 15 : 12);
       hint.height = isVR ? "22px" : "18px";
       hint.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
       stack.addControl(hint);
@@ -140,9 +130,7 @@ export function showTutorial(
       "tutDismiss",
       "press any button"
     );
-    dismiss.color = "rgba(94, 86, 68, 0.62)";
-    dismiss.fontSize = isVR ? 14 : 10;
-    dismiss.fontFamily = "system-ui, -apple-system, 'SF Pro Text', sans-serif";
+    styleFooter(dismiss, isVR ? 14 : 10);
     dismiss.paddingTopInPixels = isVR ? 18 : 12;
     dismiss.height = isVR ? "30px" : "22px";
     dismiss.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;

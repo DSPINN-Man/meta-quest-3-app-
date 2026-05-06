@@ -13,6 +13,7 @@ import {
   StackPanel,
 } from "@babylonjs/gui";
 import { HotspotData } from "../utils/config";
+import { PANEL, styleBody, stylePanel, styleTitle } from "./panelTheme";
 
 /**
  * Minimal floating info card — quiet, typographic, Apple-like.
@@ -61,12 +62,7 @@ export function showInfoPanel(
   const bg = new Rectangle("infoBg");
   bg.width = 1;
   bg.height = 1;
-  bg.cornerRadius = 20;
-  bg.thickness = 0;
-  bg.background = "rgb(14, 16, 22)";
-  bg.shadowColor = "rgba(0, 0, 0, 0.5)";
-  bg.shadowBlur = 24;
-  bg.shadowOffsetY = 4;
+  stylePanel(bg);
   panelTexture.addControl(bg);
 
   // ── Content stack ─────────────────────────────────────────
@@ -82,10 +78,7 @@ export function showInfoPanel(
 
   // ── Title — clean, white, medium weight ───────────────────
   const title = new TextBlock("infoTitle", data.title);
-  title.color = "rgba(255, 255, 255, 0.95)";
-  title.fontSize = 26;
-  title.fontWeight = "600";
-  title.fontFamily = "system-ui, -apple-system, 'SF Pro Display', sans-serif";
+  styleTitle(title, 24);
   title.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
   title.height = "38px";
   title.resizeToFit = false;
@@ -95,7 +88,7 @@ export function showInfoPanel(
   const line = new Rectangle("infoLine");
   line.width = "48px";
   line.height = "2px";
-  line.background = "rgba(100, 180, 220, 0.5)";
+  line.background = PANEL.faint;
   line.thickness = 0;
   line.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
   line.paddingTopInPixels = 6;
@@ -104,9 +97,7 @@ export function showInfoPanel(
 
   // ── Description — muted, readable ─────────────────────────
   const desc = new TextBlock("infoDesc", data.description);
-  desc.color = "rgba(190, 200, 210, 0.85)";
-  desc.fontSize = 17;
-  desc.fontFamily = "system-ui, -apple-system, 'SF Pro Text', sans-serif";
+  styleBody(desc, 16);
   desc.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
   desc.textWrapping = true;
   desc.height = "150px";
@@ -118,11 +109,11 @@ export function showInfoPanel(
   const closeBtn = Button.CreateSimpleButton("infoClose", "Dismiss");
   closeBtn.width = "90px";
   closeBtn.height = "32px";
-  closeBtn.color = "rgba(160, 170, 180, 0.7)";
+  closeBtn.color = PANEL.faint;
   closeBtn.fontSize = 14;
-  closeBtn.fontFamily = "system-ui, -apple-system, 'SF Pro Text', sans-serif";
+  closeBtn.fontFamily = PANEL.fontText;
   closeBtn.thickness = 1;
-  closeBtn.background = "rgba(255, 255, 255, 0.06)";
+  closeBtn.background = PANEL.surfaceSoft;
   closeBtn.cornerRadius = 16;
   closeBtn.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_RIGHT;
   closeBtn.verticalAlignment = Control.VERTICAL_ALIGNMENT_BOTTOM;
