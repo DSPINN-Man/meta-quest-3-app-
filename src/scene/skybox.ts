@@ -2,6 +2,7 @@ import {
   Scene,
   StandardMaterial,
   Texture,
+  Color3,
   Color4,
   PhotoDome,
 } from "@babylonjs/core";
@@ -145,14 +146,32 @@ function applyGroundLook(s: Scene, option: SkyboxOption): void {
   if (!ground) return;
 
   const photoMode = !!option.file;
-  ground.setEnabled(!photoMode);
+  ground.setEnabled(true);
 
-  // Even in photo mode we keep the diffuse colour up-to-date so a quick
-  // toggle back to Dark Studio looks correct without recomputing.
+  // Match the real shadow-receiving floor to the active photo environment.
   const mat = ground.material;
   if (mat instanceof StandardMaterial) {
     mat.diffuseColor = option.groundColor.clone();
-    mat.emissiveColor = option.groundColor.scale(0.05);
+    mat.emissiveColor = option.groundColor.scale(photoMode ? 0.012 : 0.05);
+    mat.specularColor = photoMode ? new Color3(0.12, 0.12, 0.12) : new Color3(0.08, 0.08, 0.08);
+    mat.specularPower = photoMode ? 48 : 64;
+
+    if (option.floorTexture) {
+      const existingName = mat.diffuseTexture?.name;
+      if (existingName !== option.floorTexture) {
+        mat.diffuseTexture?.dispose();
+        const floorTexture = new Texture(`textures/${option.floorTexture}`, s);
+        floorTexture.name = option.floorTexture;
+        floorTexture.uScale = option.floorTextureScale ?? 6;
+        floorTexture.vScale = option.floorTextureScale ?? 6;
+        floorTexture.wrapU = Texture.WRAP_ADDRESSMODE;
+        floorTexture.wrapV = Texture.WRAP_ADDRESSMODE;
+        mat.diffuseTexture = floorTexture;
+      }
+    } else if (mat.diffuseTexture) {
+      mat.diffuseTexture.dispose();
+      mat.diffuseTexture = null;
+    }
   }
 }
 

@@ -5,7 +5,7 @@ export const ENV = {
   /** ENSPEC Light Blue base background (#59c2d7) */
   clearColor: new Color4(0.349, 0.761, 0.843, 1),
   /** Ground plane size in meters */
-  groundSize: 40,
+  groundSize: 80,
   /** Keep the whole stage in the same ENSPEC family to avoid a mixed backdrop */
   groundColor: new Color3(0.349, 0.761, 0.843),
   /** Ground reflectivity (0 = matte, 1 = mirror) */
@@ -195,6 +195,10 @@ export interface SkyboxOption {
   label: string;
   /** Path to equirectangular image in public/textures/. null = solid color only. */
   file: string | null;
+  /** Optional tiled floor texture in public/textures/ used by the real shadow receiver. */
+  floorTexture?: string;
+  /** Number of times the floor texture repeats across the ground plane. */
+  floorTextureScale?: number;
   /**
    * Procedural fallback colour. Used when `file` is null OR when the image
    * fails to load. All options have a fallback so missing texture files never
@@ -217,21 +221,27 @@ export const SKYBOX_OPTIONS: SkyboxOption[] = [
   {
     id: "plant_room",
     label: "Premium Plant Room",
-    file: "env_premium_plant_room.png",
+    file: "env_premium_plant_room_4k.jpg",
+    floorTexture: "floor_premium_plant_room.jpg",
+    floorTextureScale: 16,
     fallbackColor: new Color4(0.18, 0.17, 0.15, 1),
     groundColor: new Color3(0.50, 0.48, 0.42),
   },
   {
     id: "energy_yard",
     label: "Energy Facility Yard",
-    file: "env_energy_facility_yard.png",
+    file: "env_energy_facility_yard_4k.jpg",
+    floorTexture: "floor_energy_facility_yard.jpg",
+    floorTextureScale: 14,
     fallbackColor: new Color4(0.62, 0.68, 0.72, 1),
     groundColor: new Color3(0.48, 0.47, 0.43),
   },
   {
     id: "demo_bay",
     label: "Exhibition Demo Bay",
-    file: "env_exhibition_demo_bay.png",
+    file: "env_exhibition_demo_bay_4k.jpg",
+    floorTexture: "floor_exhibition_demo_bay.jpg",
+    floorTextureScale: 16,
     fallbackColor: new Color4(0.03, 0.03, 0.035, 1),
     groundColor: new Color3(0.33, 0.32, 0.30),
   },

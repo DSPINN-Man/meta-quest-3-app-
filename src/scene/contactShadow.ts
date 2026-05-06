@@ -44,7 +44,7 @@ export function createContactShadow(scene: Scene, modelInfo?: ModelInfo): void {
   // Generously over-sized so the gradient fades cleanly off the edges
   // and the disc still covers the cabinet at any turntable rotation.
   const maxDim = Math.max(w, d);
-  const planeSize = maxDim * 1.8;
+  const planeSize = maxDim * 2.2;
 
   // ── Radial-gradient alpha texture ─────────────────────────────
   const tex = new DynamicTexture(
@@ -57,8 +57,8 @@ export function createContactShadow(scene: Scene, modelInfo?: ModelInfo): void {
   const ctx = tex.getContext() as CanvasRenderingContext2D;
   ctx.clearRect(0, 0, 512, 512);
   const grad = ctx.createRadialGradient(256, 256, 30, 256, 256, 240);
-  grad.addColorStop(0, "rgba(0,0,0,0.60)");
-  grad.addColorStop(0.45, "rgba(0,0,0,0.25)");
+  grad.addColorStop(0, "rgba(0,0,0,0.72)");
+  grad.addColorStop(0.45, "rgba(0,0,0,0.34)");
   grad.addColorStop(1, "rgba(0,0,0,0)");
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, 512, 512);
@@ -82,6 +82,8 @@ export function createContactShadow(scene: Scene, modelInfo?: ModelInfo): void {
   // else that might paint the ground plane in the same pixel.
   shadowMesh.position = new Vector3(center.x, 0.01, center.z);
   shadowMesh.material = mat;
+  shadowMesh.renderingGroupId = 1;
+  shadowMesh.alwaysSelectAsActiveMesh = true;
   shadowMesh.isPickable = false;
   shadowMesh.receiveShadows = false;
   shadowMesh.setEnabled(false);
