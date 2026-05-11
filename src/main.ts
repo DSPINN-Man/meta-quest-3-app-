@@ -86,7 +86,10 @@ import {
   showContactShadow,
   hideContactShadow,
 } from "./scene/contactShadow";
-import { showSkyboxPickerOnly } from "./ui/vrChoiceScreen";
+import {
+  handleSkyboxPickerAction,
+  showSkyboxPickerOnly,
+} from "./ui/vrChoiceScreen";
 import {
   showSpectatorOverlay,
   hideSpectatorOverlay,
@@ -604,6 +607,7 @@ async function main() {
 
   onXRButtonAction.add((action) => {
     console.log(`XR button action received: ${action}`);
+    if (handleSkyboxPickerAction(action)) return;
     if (isOnboardingActive()) return;
 
     // If help card is showing, any button dismisses it

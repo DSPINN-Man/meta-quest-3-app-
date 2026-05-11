@@ -1,15 +1,17 @@
 import {
-  Scene,
+  ActionManager,
+  ExecuteCodeAction,
   Mesh,
   MeshBuilder,
+  Scene,
 } from "@babylonjs/core";
 import {
   AdvancedDynamicTexture,
+  Control,
   Rectangle,
   TextBlock,
-  Control,
 } from "@babylonjs/gui";
-import { getXR } from "../interactions/xrSetup";
+import { getXR, type XRButtonAction } from "../interactions/xrSetup";
 import { SKYBOX_OPTIONS } from "../utils/config";
 import {
   VR_PANEL,
@@ -24,193 +26,205 @@ export interface VRChoices {
   skyboxId: string;
 }
 
+type SkyboxPick = string | null;
+
+const ACTION_LABELS: Partial<Record<XRButtonAction, string>> = {
+  move_closer: "A",
+  move_back: "B",
+  toggle_interior: "X",
+  toggle_explode: "Y",
+};
+
+const ACTION_ORDER: XRButtonAction[] = [
+  "move_closer",
+  "move_back",
+  "toggle_interior",
+  "toggle_explode",
+];
+
 let activeMeshes: Mesh[] = [];
+let activePickerResolve: ((value: SkyboxPick) => void) | null = null;
+let activeActionMap = new Map<XRButtonAction, SkyboxPick>();
 
 export function showVRChoiceScreen(scene: Scene): Promise<VRChoices> {
   return new Promise((resolve) => {
-    const choices: VRChoices = { mode: "full", skyboxId: "plant_room" };
-
-    showModePicker(scene, (mode) => {
-      choices.mode = mode;
-      disposeActive();
-      showSkyboxPicker(scene, (skyboxId) => {
-        choices.skyboxId = skyboxId;
-        disposeActive();
-        resolve(choices);
-      });
+    showSkyboxPickerOnly(scene).then((skyboxId) => {
+      resolve({ mode: "full", skyboxId: skyboxId ?? "enspec_theme" });
     });
   });
 }
 
-export function showSkyboxPickerOnly(scene: Scene): Promise<string | null> {
+export function showSkyboxPickerOnly(scene: Scene): Promise<SkyboxPick> {
+  disposeActive();
+
   return new Promise((resolve) => {
-    disposeActive();
-    showSkyboxPicker(scene, (skyboxId) => {
-      disposeActive();
-      resolve(skyboxId === "__cancel__" ? null : skyboxId);
-    });
+    activePickerResolve = resolve;
+    activeActionMap = new Map();
+    showSkyboxPicker(scene);
   });
 }
 
-function showModePicker(
-  scene: Scene,
-  onPicked: (mode: "quick" | "full") => void
-): void {
-  const panel = createChoicePanel(scene, "choiceMode", { width: 1.48, height: 0.62 }, 0.0, -1.6);
-  const tex = AdvancedDynamicTexture.CreateForMesh(panel, 980, 412);
+export function handleSkyboxPickerAction(action: XRButtonAction): boolean {
+  if (!activePickerResolve) return false;
 
-  const bg = createCardBg();
-  tex.addControl(bg);
+  if (action === "reset_view") {
+    resolvePicker(null);
+    return true;
+  }
 
-  addTitle(bg, "Choose experience");
-
-  createButtonRow(
-    bg,
-    "quickTour",
-    "Quick Tour",
-    "Guided highlights",
-    -34,
-    () => onPicked("quick")
-  );
-  createButtonRow(
-    bg,
-    "fullExp",
-    "Free Explore",
-    "Move, open, inspect",
-    42,
-    () => onPicked("full")
-  );
-
-  activeMeshes.push(panel);
+  if (!activeActionMap.has(action)) return true;
+  resolvePicker(activeActionMap.get(action) ?? null);
+  return true;
 }
 
-function showSkyboxPicker(scene: Scene, onPicked: (skyboxId: string) => void): void {
-  const count = SKYBOX_OPTIONS.length;
-  const panel = createChoicePanel(scene, "choiceSkybox", { width: 1.82, height: 1.05 }, 0.0, -1.28);
-  const tex = AdvancedDynamicTexture.CreateForMesh(panel, 1280, 740);
+function showSkyboxPicker(scene: Scene): void {
+  const options = SKYBOX_OPTIONS.slice(0, ACTION_ORDER.length);
+  const panel = createPlane(scene, "choiceSkyboxPanel", 1.98, 1.12, 0, 0, -1.2);
+  panel.isPickable = false;
+  const panelTex = AdvancedDynamicTexture.CreateForMesh(panel, 1320, 748);
+  const panelBg = new Rectangle("choiceSkyboxBg");
+  panelBg.width = 1;
+  panelBg.height = 1;
+  styleVRPanel(panelBg, 20, 20);
+  panelTex.addControl(panelBg);
+  activeMeshes.push(panel);
 
-  const bg = createCardBg();
-  tex.addControl(bg);
+  const title = createTextPlane(scene, "choiceSkyboxTitle", 1.74, 0.14, 0, 0.42, -1.19);
+  const titleTex = AdvancedDynamicTexture.CreateForMesh(title, 1100, 120);
+  const titleText = new TextBlock("choiceSkyboxTitleText", "Choose background");
+  styleVRTitle(titleText, 34);
+  titleText.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
+  titleTex.addControl(titleText);
+  activeMeshes.push(title);
 
-  addTitle(bg, "Choose background");
+  for (let i = 0; i < options.length; i++) {
+    const option = options[i];
+    const action = ACTION_ORDER[i];
+    const label = ACTION_LABELS[action] ?? "";
+    activeActionMap.set(action, option.id);
 
-  const rowSpacing = 82;
-  const startY = -((count - 1) / 2) * rowSpacing + 22;
-
-  for (let i = 0; i < count; i++) {
-    const opt = SKYBOX_OPTIONS[i];
-    createButtonRow(
-      bg,
-      `sky_${opt.id}`,
-      opt.label,
-      opt.file ? "4K environment" : "Studio background",
-      startY + i * rowSpacing,
-      () => onPicked(opt.id)
+    const y = 0.22 - i * 0.18;
+    createPickButton(
+      scene,
+      `skyboxButton_${option.id}`,
+      `${label}  ${option.label}`,
+      option.file ? "environment scene" : "ENSPEC theme",
+      y,
+      () => resolvePicker(option.id)
     );
   }
 
-  createButtonRow(
-    bg,
-    "sky_cancel",
-    "Close",
-    "Keep current background",
-    startY + count * rowSpacing,
-    () => onPicked("__cancel__")
+  createPickButton(
+    scene,
+    "skyboxButton_close",
+    "Grip  Close",
+    "keep current background",
+    -0.52,
+    () => resolvePicker(null)
   );
-
-  activeMeshes.push(panel);
 }
 
-function disposeActive(): void {
-  for (const m of activeMeshes) {
-    m.dispose();
-  }
-  activeMeshes = [];
-}
-
-function createChoicePanel(
+function createPickButton(
   scene: Scene,
   name: string,
-  size: { width: number; height: number },
-  yOffset: number,
-  zOffset: number
-): Mesh {
-  const mesh = MeshBuilder.CreatePlane(name, size, scene);
+  label: string,
+  subtitle: string,
+  y: number,
+  onPick: () => void
+): void {
+  const mesh = createPlane(scene, name, 1.58, 0.13, 0, y, -1.18);
   mesh.isPickable = true;
+  mesh.actionManager = new ActionManager(scene);
+  mesh.actionManager.registerAction(
+    new ExecuteCodeAction(ActionManager.OnPickTrigger, onPick)
+  );
 
-  const xr = getXR();
-  const xrCamera = xr?.baseExperience.camera;
-  if (xrCamera) {
-    mesh.parent = xrCamera;
-    mesh.position.set(0, yOffset, zOffset);
-    mesh.rotation.set(0, 0, 0);
-  } else {
-    mesh.position.set(0, 1.6 + yOffset, zOffset);
-    mesh.billboardMode = Mesh.BILLBOARDMODE_ALL;
-  }
+  const tex = AdvancedDynamicTexture.CreateForMesh(mesh, 1000, 120);
+  const bg = new Rectangle(`${name}_bg`);
+  bg.width = 1;
+  bg.height = 1;
+  styleVRButton(bg);
+  tex.addControl(bg);
 
+  const labelText = new TextBlock(`${name}_label`, label);
+  styleVRTitle(labelText, 23);
+  labelText.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
+  labelText.paddingLeftInPixels = 34;
+  labelText.topInPixels = -12;
+  bg.addControl(labelText);
+
+  const subText = new TextBlock(`${name}_subtitle`, subtitle);
+  styleVRBody(subText, 15);
+  subText.color = VR_PANEL.faint;
+  subText.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
+  subText.paddingLeftInPixels = 34;
+  subText.topInPixels = 20;
+  bg.addControl(subText);
+
+  mesh.actionManager.registerAction(
+    new ExecuteCodeAction(ActionManager.OnPointerOverTrigger, () => {
+      bg.background = VR_PANEL.surfaceHover;
+      bg.color = VR_PANEL.borderHover;
+    })
+  );
+  mesh.actionManager.registerAction(
+    new ExecuteCodeAction(ActionManager.OnPointerOutTrigger, () => {
+      styleVRButton(bg);
+    })
+  );
+
+  activeMeshes.push(mesh);
+}
+
+function createTextPlane(
+  scene: Scene,
+  name: string,
+  width: number,
+  height: number,
+  x: number,
+  y: number,
+  z: number
+): Mesh {
+  const mesh = createPlane(scene, name, width, height, x, y, z);
+  mesh.isPickable = false;
   return mesh;
 }
 
-function createCardBg(): Rectangle {
-  const bg = new Rectangle("choiceBg");
-  bg.width = 1;
-  bg.height = 1;
-  styleVRPanel(bg, 20, 20);
-  return bg;
+function createPlane(
+  scene: Scene,
+  name: string,
+  width: number,
+  height: number,
+  x: number,
+  y: number,
+  z: number
+): Mesh {
+  const mesh = MeshBuilder.CreatePlane(name, { width, height }, scene);
+  const xrCamera = getXR()?.baseExperience.camera;
+  if (xrCamera) {
+    mesh.parent = xrCamera;
+    mesh.position.set(x, y, z);
+    mesh.rotation.set(0, 0, 0);
+  } else {
+    mesh.position.set(x, 1.6 + y, z);
+    mesh.billboardMode = Mesh.BILLBOARDMODE_ALL;
+  }
+  return mesh;
 }
 
-function addTitle(parent: Rectangle, title: string): void {
-  const tb = new TextBlock("choiceTitle", title);
-  styleVRTitle(tb, 32);
-  tb.height = "64px";
-  tb.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
-  tb.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
-  tb.paddingTopInPixels = 20;
-  parent.addControl(tb);
+function resolvePicker(value: SkyboxPick): void {
+  const resolve = activePickerResolve;
+  if (!resolve) return;
+
+  activePickerResolve = null;
+  activeActionMap.clear();
+  disposeActive();
+  resolve(value);
 }
 
-function createButtonRow(
-  parentBg: Rectangle,
-  id: string,
-  label: string,
-  subtitle: string,
-  topPx: number,
-  onClick: () => void
-): void {
-  const row = new Rectangle(`row_${id}`);
-  row.width = "88%";
-  row.height = "66px";
-  styleVRButton(row);
-  row.verticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
-  row.topInPixels = topPx;
-  row.isPointerBlocker = true;
-  parentBg.addControl(row);
-
-  const labelTb = new TextBlock(`label_${id}`, label);
-  styleVRTitle(labelTb, 22);
-  labelTb.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
-  labelTb.paddingLeftInPixels = 20;
-  labelTb.topInPixels = -8;
-  row.addControl(labelTb);
-
-  const subTb = new TextBlock(`sub_${id}`, subtitle);
-  styleVRBody(subTb, 15);
-  subTb.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
-  subTb.paddingLeftInPixels = 20;
-  subTb.topInPixels = 14;
-  row.addControl(subTb);
-
-  row.onPointerEnterObservable.add(() => {
-    row.background = VR_PANEL.surfaceHover;
-    row.color = VR_PANEL.borderHover;
-  });
-  row.onPointerOutObservable.add(() => {
-    styleVRButton(row);
-  });
-
-  row.onPointerClickObservable.add(() => {
-    row.background = VR_PANEL.surfacePressed;
-    onClick();
-  });
+function disposeActive(): void {
+  for (const mesh of activeMeshes) {
+    mesh.dispose();
+  }
+  activeMeshes = [];
 }

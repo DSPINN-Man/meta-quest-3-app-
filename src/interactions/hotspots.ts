@@ -93,9 +93,11 @@ export function createHotspots(scene: Scene, modelInfo?: ModelInfo): void {
       return n === wanted || n.startsWith(wanted + "_") || n.startsWith(wanted + ".");
     });
 
-    let targetMesh = candidates[0] ?? null;
-    if (candidates.length > 1) {
-      // Pick the largest — usually the dominant-geometry primitive.
+    let targetMesh =
+      candidates.find((m) => m.name.toLowerCase() === wanted) ??
+      candidates[0] ??
+      null;
+    if (candidates.length > 1 && targetMesh.name.toLowerCase() !== wanted) {
       let bestVerts = -1;
       for (const c of candidates) {
         const verts = c.getTotalVertices();
