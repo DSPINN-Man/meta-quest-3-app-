@@ -4,7 +4,12 @@ import {
   WebXRState,
   WebXRInputSource,
   Mesh,
+  LinesMesh,
+  MeshBuilder,
+  StandardMaterial,
+  Color3,
   Vector3,
+  Ray,
   Observable,
   Observer,
 } from "@babylonjs/core";
@@ -31,9 +36,20 @@ type TrackedController = {
   source: WebXRInputSource;
   pressedButtons: Set<number>;
   hasMotionProfile: boolean;
+  visual?: ControllerVisual;
+};
+
+type ControllerVisual = {
+  body: Mesh;
+  tip: Mesh;
+  reticle: Mesh;
+  laser: LinesMesh;
+  ray: Ray;
+  points: Vector3[];
 };
 
 const trackedControllers = new Map<string, TrackedController>();
+const CONTROLLER_RAY_LENGTH = 2.6;
 
 export const onXRInput = new Observable<void>();
 export const onVRStateChanged = new Observable<boolean>();
@@ -220,6 +236,19 @@ export async function setupXR(
 
     const xr = await scene.createDefaultXRExperienceAsync({
       disableTeleportation: true,
+      inputOptions: {
+        // Avoid depending on an online controller-model repository at a booth.
+        // Fallback controller visuals below still render if no model appears.
+        disableOnlineControllerRepository: true,
+        controllerOptions: {
+          renderingGroupId: 2,
+        },
+      },
+      pointerSelectionOptions: {
+        enablePointerSelectionOnAllControllers: true,
+        maxPointerDistance: 12,
+        renderingGroupId: 2,
+      },
       uiOptions: {
         sessionMode: "immersive-vr",
         referenceSpaceType: "local-floor",
@@ -231,6 +260,12 @@ export async function setupXR(
     // Verify pointer selection is active — this is what makes
     // trigger clicks fire OnPickTrigger on menu buttons / hotspots.
     if (xr.pointerSelection) {
+      xr.pointerSelection.displayLaserPointer = true;
+      xr.pointerSelection.displaySelectionMesh = true;
+      xr.pointerSelection.disablePointerLighting = true;
+      xr.pointerSelection.disableSelectionMeshLighting = true;
+      xr.pointerSelection.laserPointerDefaultColor = new Color3(0.35, 0.76, 0.84);
+      xr.pointerSelection.selectionMeshDefaultColor = new Color3(0.31, 0.75, 0.69);
       console.log("WebXR pointer selection: ACTIVE — trigger clicks will fire pick events.");
     } else {
       console.error("WebXR pointer selection: NOT AVAILABLE — buttons won't work!");
@@ -266,10 +301,12 @@ function setupTrackedControllers(
   scene: Scene
 ): void {
   input.onControllerAddedObservable.add((controller) => {
+    const visual = createControllerVisual(controller, scene);
     trackedControllers.set(controller.uniqueId, {
       source: controller,
       pressedButtons: new Set<number>(),
       hasMotionProfile: false,
+      visual,
     });
 
     controller.onMotionControllerInitObservable.add((motionController) => {
@@ -319,16 +356,137 @@ function setupTrackedControllers(
     });
 
     controller.onDisposeObservable.add(() => {
+      disposeControllerVisual(trackedControllers.get(controller.uniqueId)?.visual);
       trackedControllers.delete(controller.uniqueId);
     });
   });
 
   if (!pollObserver) {
     pollObserver = scene.onBeforeRenderObservable.add(() => {
+      updateControllerVisuals(scene);
       pollQuestButtons();
       pollJoystickAxes();
     });
   }
+}
+
+function createControllerVisual(
+  controller: WebXRInputSource,
+  scene: Scene
+): ControllerVisual {
+  const hand = controller.inputSource.handedness;
+  const color =
+    hand === "left"
+      ? new Color3(0.35, 0.76, 0.84)
+      : new Color3(0.31, 0.75, 0.69);
+
+  const material = new StandardMaterial(`xrController_${hand}_mat`, scene);
+  material.diffuseColor = color.scale(0.65);
+  material.emissiveColor = color;
+  material.specularColor = Color3.White();
+  material.disableLighting = true;
+
+  const body = MeshBuilder.CreateBox(
+    `xrController_${hand}_body`,
+    { width: 0.06, height: 0.08, depth: 0.16 },
+    scene
+  );
+  body.material = material;
+  body.isPickable = false;
+  body.renderingGroupId = 2;
+  body.alwaysSelectAsActiveMesh = true;
+
+  const tip = MeshBuilder.CreateSphere(
+    `xrController_${hand}_tip`,
+    { diameter: 0.045, segments: 12 },
+    scene
+  );
+  tip.material = material;
+  tip.isPickable = false;
+  tip.renderingGroupId = 2;
+  tip.alwaysSelectAsActiveMesh = true;
+
+  const anchor = controller.grip ?? controller.pointer;
+  body.parent = anchor;
+  tip.parent = anchor;
+  body.position.set(0, -0.015, 0.02);
+  tip.position.set(0, 0, -0.09);
+
+  const points = [Vector3.Zero(), new Vector3(0, 0, -CONTROLLER_RAY_LENGTH)];
+  const laser = MeshBuilder.CreateLines(
+    `xrController_${hand}_laser`,
+    { points, updatable: true },
+    scene
+  );
+  laser.color = color;
+  laser.alpha = 0.9;
+  laser.isPickable = false;
+  laser.renderingGroupId = 2;
+  laser.alwaysSelectAsActiveMesh = true;
+
+  const reticle = MeshBuilder.CreateSphere(
+    `xrController_${hand}_reticle`,
+    { diameter: 0.035, segments: 12 },
+    scene
+  );
+  reticle.material = material;
+  reticle.isPickable = false;
+  reticle.renderingGroupId = 2;
+  reticle.alwaysSelectAsActiveMesh = true;
+
+  const visual = {
+    body,
+    tip,
+    reticle,
+    laser,
+    ray: new Ray(Vector3.Zero(), Vector3.Forward(), CONTROLLER_RAY_LENGTH),
+    points,
+  };
+  setControllerVisualEnabled(visual, false);
+  return visual;
+}
+
+function updateControllerVisuals(scene: Scene): void {
+  for (const tracked of trackedControllers.values()) {
+    const visual = tracked.visual;
+    if (!visual) continue;
+
+    setControllerVisualEnabled(visual, vrActive);
+    if (!vrActive) continue;
+
+    tracked.source.getWorldPointerRayToRef(visual.ray, true);
+    visual.points[0].copyFrom(visual.ray.origin);
+    visual.points[1]
+      .copyFrom(visual.ray.direction)
+      .scaleInPlace(CONTROLLER_RAY_LENGTH)
+      .addInPlace(visual.ray.origin);
+
+    MeshBuilder.CreateLines(
+      visual.laser.name,
+      { points: visual.points, instance: visual.laser },
+      scene
+    );
+    visual.reticle.position.copyFrom(visual.points[1]);
+  }
+}
+
+function setControllerVisualEnabled(
+  visual: ControllerVisual,
+  enabled: boolean
+): void {
+  visual.body.setEnabled(enabled);
+  visual.tip.setEnabled(enabled);
+  visual.reticle.setEnabled(enabled);
+  visual.laser.setEnabled(enabled);
+}
+
+function disposeControllerVisual(visual?: ControllerVisual): void {
+  if (!visual) return;
+  visual.body.material?.dispose();
+  visual.body.dispose();
+  visual.tip.dispose();
+  visual.reticle.dispose();
+  visual.laser.dispose();
 }
 
 function pollQuestButtons(): void {
