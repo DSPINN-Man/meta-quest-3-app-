@@ -1,6 +1,6 @@
 import { MODEL, SKYBOX_OPTIONS } from "./utils/config";
 
-const CACHE_NAME = "enspec-vr-offline-v1";
+const CACHE_NAME = "enspec-vr-offline-v2";
 
 type Status = "working" | "ready" | "unavailable" | "error";
 
@@ -35,9 +35,14 @@ function supportsOfflineCache(): boolean {
 
 async function prepareOfflineCache(): Promise<void> {
   try {
-    const registration = await navigator.serviceWorker.register("/offline-sw.js", {
-      scope: "/",
-    });
+    const registration = await navigator.serviceWorker.register(
+      "/offline-sw.js",
+      {
+        scope: "/",
+        updateViaCache: "none",
+      }
+    );
+    await registration.update();
     await navigator.serviceWorker.ready;
 
     const urls = collectOfflineUrls();

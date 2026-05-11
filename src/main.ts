@@ -50,7 +50,15 @@ import {
   hideHotspots,
   pulseHotspotsOnce,
 } from "./interactions/hotspots";
-import { createFloatingMenu, onMenuButton, showMenu, hideMenu } from "./ui/floatingMenu";
+import {
+  createFloatingMenu,
+  onMenuButton,
+  showMenu,
+  hideMenu,
+  showMainMenu,
+  showBackgroundMenu,
+  isBackgroundMenuOpen,
+} from "./ui/floatingMenu";
 import {
   createPanicReset,
   onPanicReset,
@@ -86,12 +94,6 @@ import {
   showContactShadow,
   hideContactShadow,
 } from "./scene/contactShadow";
-import {
-  closeSkyboxPicker,
-  handleSkyboxPickerAction,
-  isSkyboxPickerOpen,
-  showSkyboxPickerOnly,
-} from "./ui/vrChoiceScreen";
 import {
   showSpectatorOverlay,
   hideSpectatorOverlay,
@@ -219,27 +221,46 @@ async function main() {
     }
   }
 
-  async function chooseSkybox(): Promise<void> {
-    if (isSkyboxPickerOpen()) {
-      closeSkyboxPicker();
-      setSpectatorStatus("Backgrounds", "Closed");
-      return;
+  function openBackgroundMenu(): void {
+    showBackgroundMenu();
+    setSpectatorStatus("Backgrounds", "Pick with A / B / X / Y");
+  }
+
+  function closeBackgroundMenu(): void {
+    showMainMenu();
+    showMenu();
+    setSpectatorStatus("Backgrounds", "Closed");
+  }
+
+  function chooseSkybox(id: string): void {
+    applySkybox(id);
+    const label = SKYBOX_OPTIONS.find((option) => option.id === id)?.label ?? id;
+    showMainMenu();
+    showMenu();
+    setSpectatorStatus("Background", label);
+    console.log(`Background selected: ${id} (${label})`);
+  }
+
+  function handleBackgroundMenuAction(action: XRButtonAction): boolean {
+    if (!isBackgroundMenuOpen()) return false;
+
+    if (action === "reset_view") {
+      closeBackgroundMenu();
+      return true;
     }
 
-    setSpectatorStatus("Backgrounds", "Choosing environment");
-    try {
-      const selected = await showSkyboxPickerOnly(scene, modelInfo ?? undefined);
-      if (selected) {
-        applySkybox(selected);
-        const label =
-          SKYBOX_OPTIONS.find((option) => option.id === selected)?.label ??
-          selected;
-        setSpectatorStatus("Background", label);
-        console.log(`Background selected: ${selected} (${label})`);
-      }
-    } finally {
-      showMenu();
-    }
+    const actionIndex: Partial<Record<XRButtonAction, number>> = {
+      move_closer: 0,
+      move_back: 1,
+      toggle_interior: 2,
+      toggle_explode: 3,
+    };
+    const index = actionIndex[action];
+    if (typeof index !== "number") return true;
+
+    const option = SKYBOX_OPTIONS[index];
+    if (option) chooseSkybox(option.id);
+    return true;
   }
   onHotspotActivated((data, worldPos) => {
     // Always teleport to the clicked hotspot — user should be able to click
@@ -318,6 +339,7 @@ async function main() {
 
   function doReset() {
     inspectActive = false;
+    showMainMenu();
     resetExplodedView();
     resetDoors();
     resetGuidedView();
@@ -383,6 +405,11 @@ async function main() {
     inspectedHotspots.clear();
   }
   onMenuButton((id) => {
+    if (id.startsWith("skybox:")) {
+      chooseSkybox(id.slice("skybox:".length));
+      return;
+    }
+
     switch (id) {
       case "move_closer":
         void handleXRAction("move_closer");
@@ -400,7 +427,10 @@ async function main() {
         void handleXRAction("reset_view");
         break;
       case "settings":
-        void chooseSkybox();
+        openBackgroundMenu();
+        break;
+      case "background_back":
+        closeBackgroundMenu();
         break;
     }
   });
@@ -547,6 +577,7 @@ async function main() {
       // session — never hidden by the choice screen, tutorial, or menu.
       hidePanicReset();
       showSpectatorOverlay();
+      showMainMenu();
       hideMenu();
       hideGuidedPrompt();
       closeInfoPanel();
@@ -594,12 +625,14 @@ async function main() {
       }
 
       showPanicReset();
+      showMainMenu();
       showMenu();
       setSpectatorStatus("Tutorial", "Learning the controls");
       tutorialStep = 0;
       showTutorialStep();
     } catch (err) {
       console.error("VR onboarding flow failed - falling back to tutorial.", err);
+      showMainMenu();
       showMenu();
       tutorialStep = 0;
       showTutorialStep();
@@ -617,7 +650,7 @@ async function main() {
 
   onXRButtonAction.add((action) => {
     console.log(`XR button action received: ${action}`);
-    if (handleSkyboxPickerAction(action)) return;
+    if (handleBackgroundMenuAction(action)) return;
     if (isOnboardingActive()) return;
 
     // If help card is showing, any button dismisses it

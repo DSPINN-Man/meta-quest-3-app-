@@ -1,4 +1,4 @@
-const CACHE_NAME = "enspec-vr-offline-v1";
+const CACHE_NAME = "enspec-vr-offline-v2";
 
 const PRECACHE_URLS = [
   "/",
@@ -80,6 +80,26 @@ self.addEventListener("fetch", (event) => {
             Response.error()
           );
         })
+    );
+    return;
+  }
+
+  if (
+    url.pathname.startsWith("/assets/") ||
+    url.pathname.endsWith(".js") ||
+    url.pathname.endsWith(".css") ||
+    url.pathname === "/offline-sw.js"
+  ) {
+    event.respondWith(
+      fetch(new Request(request, { cache: "reload" }))
+        .then(async (response) => {
+          if (response.ok) {
+            const cache = await caches.open(CACHE_NAME);
+            await cache.put(request, response.clone());
+          }
+          return response;
+        })
+        .catch(async () => (await caches.match(request)) || Response.error())
     );
     return;
   }
