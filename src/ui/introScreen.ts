@@ -11,7 +11,16 @@ import {
   Control,
 } from "@babylonjs/gui";
 import { getXR } from "../interactions/xrSetup";
-import { PANEL, styleBody, stylePanel, styleTitle } from "./panelTheme";
+import {
+  PANEL,
+  VR_PANEL,
+  styleBody,
+  stylePanel,
+  styleTitle,
+  styleVRBody,
+  styleVRPanel,
+  styleVRTitle,
+} from "./panelTheme";
 
 /**
  * Desktop keeps the ENSPEC intro video.
@@ -119,36 +128,37 @@ function showDesktopIntro(): void {
 function showVRIntro(scene: Scene): void {
   introMesh = MeshBuilder.CreatePlane(
     "introBrandPlane",
-    { width: 2.5, height: 1.2 },
+    { width: 2.8, height: 1.34 },
     scene
   );
   introMesh.isPickable = false;
-  attachMeshToViewer(introMesh, -1.55, 0.02);
-  introTexture = AdvancedDynamicTexture.CreateForMesh(introMesh, 1200, 576);
+  attachMeshToViewer(introMesh, -1.48, 0.03);
+  introTexture = AdvancedDynamicTexture.CreateForMesh(introMesh, 1344, 644);
 
   const bg = new Rectangle("introBg");
   bg.width = 1;
   bg.height = 1;
-  stylePanel(bg, 24, 18);
+  styleVRPanel(bg, 24, 20);
   introTexture.addControl(bg);
 
   const stack = new StackPanel("introStack");
   stack.isVertical = true;
-  stack.paddingTopInPixels = 70;
-  stack.paddingLeftInPixels = 70;
-  stack.paddingRightInPixels = 70;
+  stack.paddingTopInPixels = 78;
+  stack.paddingLeftInPixels = 82;
+  stack.paddingRightInPixels = 82;
   bg.addControl(stack);
 
   const brand = new TextBlock("introBrand", "ENSPEC");
-  styleTitle(brand, 76);
-  brand.height = "90px";
+  styleVRTitle(brand, 84);
+  brand.color = VR_PANEL.accent;
+  brand.height = "96px";
   brand.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
   stack.addControl(brand);
 
   const title = new TextBlock("introTitle", "Interactive Product Showcase");
-  styleBody(title, 34);
-  title.color = PANEL.text;
-  title.height = "54px";
+  styleVRBody(title, 34);
+  title.color = VR_PANEL.text;
+  title.height = "58px";
   title.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
   stack.addControl(title);
 
@@ -156,12 +166,22 @@ function showVRIntro(scene: Scene): void {
     "introSubtitle",
     "A guided Meta Quest 3 experience"
   );
-  subtitle.color = "rgba(135, 218, 235, 0.92)";
-  styleBody(subtitle, 26);
-  subtitle.color = PANEL.faint;
-  subtitle.height = "44px";
+  styleVRBody(subtitle, 26);
+  subtitle.color = VR_PANEL.faint;
+  subtitle.height = "48px";
   subtitle.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
   stack.addControl(subtitle);
+
+  const footer = new TextBlock(
+    "introFooter",
+    "Preparing the guided walkthrough"
+  );
+  styleVRBody(footer, 21);
+  footer.color = VR_PANEL.muted;
+  footer.height = "42px";
+  footer.paddingTopInPixels = 18;
+  footer.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
+  stack.addControl(footer);
 
   runSceneTimer(scene, VR_INTRO_MS, () => {
     fadeOutAndDispose();

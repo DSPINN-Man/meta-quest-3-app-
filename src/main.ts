@@ -22,6 +22,7 @@ import {
   onJoystickAxes,
   isInVR,
   getXR,
+  waitForXRReadyFrames,
   type XRButtonAction,
 } from "./interactions/xrSetup";
 import {
@@ -85,7 +86,6 @@ import {
   showContactShadow,
   hideContactShadow,
 } from "./scene/contactShadow";
-import { showVRChoiceScreen, showSkyboxPickerOnly } from "./ui/vrChoiceScreen";
 import { runQuickTour, isQuickTourActive, skipQuickTourAct } from "./flow/quickTour";
 import {
   showSpectatorOverlay,
@@ -98,7 +98,7 @@ import {
   showHotspotCounter,
   hideHotspotCounter,
 } from "./ui/hotspotCounter";
-import { HOTSPOTS } from "./utils/config";
+import { HOTSPOTS, SKYBOX_OPTIONS } from "./utils/config";
 
 async function main() {
   initOfflineCache();
@@ -197,6 +197,10 @@ async function main() {
 
   createHotspots(scene, modelInfo ?? undefined);
   createContactShadow(scene, modelInfo ?? undefined);
+  let currentSkyboxIndex = Math.max(
+    0,
+    SKYBOX_OPTIONS.findIndex((option) => option.id === "plant_room")
+  );
 
   /**
    * Apply a skybox AND toggle the contact-shadow disc to match.
@@ -205,11 +209,25 @@ async function main() {
    */
   function applySkybox(id: string): void {
     setSkybox(scene, id);
+    const matchedIndex = SKYBOX_OPTIONS.findIndex((option) => option.id === id);
+    if (matchedIndex >= 0) {
+      currentSkyboxIndex = matchedIndex;
+    }
     if (isPhotoSkybox(id)) {
       showContactShadow();
     } else {
       hideContactShadow();
     }
+  }
+
+  function cycleSkybox(): void {
+    currentSkyboxIndex = (currentSkyboxIndex + 1) % SKYBOX_OPTIONS.length;
+    const next = SKYBOX_OPTIONS[currentSkyboxIndex];
+    applySkybox(next.id);
+    if (isInVR()) {
+      setSpectatorStatus("Background", next.label);
+    }
+    console.log(`Background cycled to ${next.id} (${next.label})`);
   }
   onHotspotActivated((data, worldPos) => {
     // Always teleport to the clicked hotspot — user should be able to click
@@ -412,20 +430,7 @@ async function main() {
         })();
         break;
       case "settings":
-        // In-VR background switcher. Hide the menu while the picker is
-        // open so the controller ray doesn't pick the menu through it.
-        void (async () => {
-          hideMenu();
-          if (isInVR()) {
-            setSpectatorStatus("Settings", "Choosing background");
-          }
-          const skyboxId = await showSkyboxPickerOnly(scene);
-          applySkybox(skyboxId);
-          showMenu();
-          if (isInVR()) {
-            setSpectatorStatus("Free Exploration", "Background updated");
-          }
-        })();
+        cycleSkybox();
         break;
     }
   });
@@ -581,11 +586,9 @@ async function main() {
       tutorialStep = -1;
       inspectActive = false;
       const flowId = ++vrFlowRunId;
-      setSpectatorStatus("Starting", "Preparing VR experience");
-      // Run the mode/skybox picker BEFORE the menu/tutorial appear.
-      // The menu and tutorial both reveal after the user picks.
+      setSpectatorStatus("Starting", "Waiting for headset view");
       void startDirectVRFlow(flowId);
-      console.log("VR entered — choice screen shown.");
+      console.log("VR entered - direct onboarding flow starting.");
     } else {
       vrFlowRunId += 1;
       stopScriptedDemo();
@@ -602,14 +605,20 @@ async function main() {
   });
 
   /**
-   * Show the VR choice screen, apply the chosen background, then branch:
-   *   quick → runQuickTour (skips the button-driven tutorial entirely)
-   *   full  → reveal menu and start the tutorialSteps walkthrough
+   * Start onboarding only after XR is truly rendering. Quest can report
+   * IN_XR before the user actually sees the immersive scene, which let the
+   * timed intro/tutorial phases expire during the transition itself.
    */
   async function startDirectVRFlow(flowId: number): Promise<void> {
     try {
+      const xrReady = await waitForXRReadyFrames(10);
+      if (!xrReady || !isInVR() || flowId !== vrFlowRunId) {
+        return;
+      }
+
       doReset();
       applySkybox("plant_room");
+      setSpectatorStatus("Onboarding", "Showing ENSPEC intro");
       await runOnboarding();
 
       if (!isInVR() || flowId !== vrFlowRunId) {
@@ -621,38 +630,8 @@ async function main() {
       setSpectatorStatus("Tutorial", "Learning the controls");
       tutorialStep = 0;
       showTutorialStep();
-      return;
-
-      const choices = await showVRChoiceScreen(scene);
-      console.log(
-        `VR choice: mode=${choices.mode}, skybox=${choices.skyboxId}`
-      );
-      applySkybox(choices.skyboxId);
-
-      if (choices.mode === "quick") {
-        // Quick Tour — fully scripted, no tutorial cards.
-        doReset();
-        hideGuidedPrompt();
-        clearFinalCardTimer();
-        tutorialStep = -1;
-        showMenu();
-        setSpectatorStatus("Quick Tour", "Auto-guided narrative");
-        await runQuickTour(scene, {
-          moveCloser: () => stepGuidedView(1),
-          revealInterior: () => doToggleInterior(),
-          explode: () => doToggleExploded(),
-          reset: () => doReset(),
-        });
-        setSpectatorStatus("Free Exploration", "Tour complete");
-      } else {
-        // Full Experience — reveal menu and start the guided tutorial.
-        showMenu();
-        setSpectatorStatus("Tutorial", "Learning the controls");
-        tutorialStep = 0;
-        showTutorialStep();
-      }
     } catch (err) {
-      console.error("VR choice flow failed — falling back to tutorial.", err);
+      console.error("VR onboarding flow failed - falling back to tutorial.", err);
       showMenu();
       tutorialStep = 0;
       showTutorialStep();

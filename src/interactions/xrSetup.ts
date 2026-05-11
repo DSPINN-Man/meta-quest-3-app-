@@ -134,6 +134,69 @@ export function getUserPosition(): Vector3 {
   return startingPosition.clone();
 }
 
+export async function waitForXRReadyFrames(
+  frameCount = 8,
+  timeoutMs = 4000
+): Promise<boolean> {
+  if (!xrExperience || !vrActive) {
+    return false;
+  }
+
+  const sessionManager = xrExperience.baseExperience.sessionManager;
+
+  return new Promise((resolve) => {
+    let resolved = false;
+    let seenFrames = 0;
+    let frameObserver: Observer<any> | null = null;
+    let readyObserver: Observer<any> | null = null;
+
+    const cleanup = () => {
+      if (frameObserver) {
+        sessionManager.onXRFrameObservable.remove(frameObserver);
+        frameObserver = null;
+      }
+      if (readyObserver) {
+        sessionManager.onXRReady.remove(readyObserver);
+        readyObserver = null;
+      }
+    };
+
+    const finish = (result: boolean) => {
+      if (resolved) return;
+      resolved = true;
+      cleanup();
+      resolve(result);
+    };
+
+    const beginCountingFrames = () => {
+      if (frameObserver) return;
+      frameObserver = sessionManager.onXRFrameObservable.add(() => {
+        if (!vrActive) {
+          finish(false);
+          return;
+        }
+
+        seenFrames += 1;
+        if (seenFrames >= frameCount) {
+          finish(true);
+        }
+      });
+    };
+
+    if (sessionManager.inXRFrameLoop) {
+      beginCountingFrames();
+    } else {
+      readyObserver = sessionManager.onXRReady.add(() => {
+        beginCountingFrames();
+      });
+    }
+
+    window.setTimeout(() => {
+      finish(sessionManager.inXRFrameLoop || vrActive);
+    }, timeoutMs);
+  });
+}
+
 export async function setupXR(
   scene: Scene,
   _ground: Mesh,

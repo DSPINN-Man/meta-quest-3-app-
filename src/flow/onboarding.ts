@@ -117,14 +117,18 @@ async function runOnboardingInternal(): Promise<void> {
   await showIntroScreen(scene, vr);
 
   // ── Phase 2: Controller Tutorial ──────────────────────
-  console.log(`Onboarding: tutorial (vr=${vr})`);
-  const tutorial = showTutorial(scene, vr);
+  if (!vr) {
+    console.log(`Onboarding: tutorial (vr=${vr})`);
+    const tutorial = showTutorial(scene, false);
 
-  // Skip tutorial on any input (XR or desktop)
-  const skipTutorial = () => tutorial.skip();
-  attachSkipListener(skipTutorial);
-  await tutorial.promise;
-  detachSkipListener();
+    // Skip tutorial on any input (XR or desktop)
+    const skipTutorial = () => tutorial.skip();
+    attachSkipListener(skipTutorial);
+    await tutorial.promise;
+    detachSkipListener();
+  } else {
+    console.log("Onboarding: VR static tutorial skipped - guided walkthrough owns this phase.");
+  }
 
   // ── Phase 3: Cinematic Orbit — DISABLED ────────────────
   // The cinematic 360° orbit was running every time the kiosk idle

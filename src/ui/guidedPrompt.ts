@@ -7,7 +7,13 @@ import {
   Control,
 } from "@babylonjs/gui";
 import { getXR } from "../interactions/xrSetup";
-import { PANEL, styleBody, styleFooter, stylePanel, styleTitle } from "./panelTheme";
+import {
+  VR_PANEL,
+  styleVRBody,
+  styleVRFooter,
+  styleVRPanel,
+  styleVRTitle,
+} from "./panelTheme";
 
 /**
  * Minimal prompt card that follows the XR camera during guided moments.
@@ -21,53 +27,53 @@ let bodyBlock: TextBlock | null = null;
 let footerBlock: TextBlock | null = null;
 
 const VIEWER_Z_OFFSET = -1.75;
-const VIEWER_Y_OFFSET = -0.08;
+const VIEWER_Y_OFFSET = -0.04;
 
 export function initGuidedPrompt(scene: Scene): void {
   if (promptMesh || promptTexture) return;
 
   promptMesh = MeshBuilder.CreatePlane(
     "guidedPromptPlane",
-    { width: 1.5, height: 0.58 },
+    { width: 1.78, height: 0.78 },
     scene
   );
   promptMesh.isPickable = false;
   promptMesh.setEnabled(false);
   attachToViewer(promptMesh);
 
-  promptTexture = AdvancedDynamicTexture.CreateForMesh(promptMesh, 1040, 408);
+  promptTexture = AdvancedDynamicTexture.CreateForMesh(promptMesh, 1320, 580);
 
   const bg = new Rectangle("guidedPromptBg");
   bg.width = 1;
   bg.height = 1;
-  stylePanel(bg);
+  styleVRPanel(bg, 20, 18);
   promptTexture.addControl(bg);
 
   const stack = new StackPanel("guidedPromptStack");
   stack.isVertical = true;
-  stack.paddingTopInPixels = 26;
-  stack.paddingLeftInPixels = 34;
-  stack.paddingRightInPixels = 34;
-  stack.paddingBottomInPixels = 20;
+  stack.paddingTopInPixels = 34;
+  stack.paddingLeftInPixels = 44;
+  stack.paddingRightInPixels = 44;
+  stack.paddingBottomInPixels = 28;
   bg.addControl(stack);
 
   titleBlock = new TextBlock("guidedPromptTitle", "");
-  styleTitle(titleBlock);
-  titleBlock.height = "40px";
+  styleVRTitle(titleBlock, 30);
+  titleBlock.height = "46px";
   titleBlock.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
   stack.addControl(titleBlock);
 
   bodyBlock = new TextBlock("guidedPromptBody", "");
-  styleBody(bodyBlock);
+  styleVRBody(bodyBlock, 20);
   bodyBlock.textWrapping = true;
-  bodyBlock.lineSpacing = "4px";
-  bodyBlock.height = "250px";
+  bodyBlock.lineSpacing = "6px";
+  bodyBlock.height = "340px";
   bodyBlock.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
   stack.addControl(bodyBlock);
 
   footerBlock = new TextBlock("guidedPromptFooter", "");
-  styleFooter(footerBlock);
-  footerBlock.height = "28px";
+  styleVRFooter(footerBlock, 17);
+  footerBlock.height = "34px";
   footerBlock.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
   stack.addControl(footerBlock);
 }
@@ -123,7 +129,7 @@ export function showSuccessFeedback(message: string = "Got it"): void {
   const originalTitleColor = titleBlock.color;
 
   titleBlock.text = message;
-  titleBlock.color = PANEL.success;
+  titleBlock.color = VR_PANEL.success;
 
   setTimeout(() => {
     if (titleBlock && titleBlock.text === message) {

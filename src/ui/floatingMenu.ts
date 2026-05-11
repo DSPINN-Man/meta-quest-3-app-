@@ -13,7 +13,7 @@ import {
   Control,
 } from "@babylonjs/gui";
 import type { ModelInfo } from "../scene/modelLoader";
-import { PANEL } from "./panelTheme";
+import { VR_PANEL } from "./panelTheme";
 
 /**
  * Floating 3D menu fixed beside the model.
@@ -32,14 +32,14 @@ interface MenuButton {
 let buttons: MenuButton[] = [];
 let onButtonCallback: ((id: string) => void) | null = null;
 
-const BG_REST = "rgba(246, 244, 238, 0.82)";
-const BG_HOVER = PANEL.surfaceHover;
-const BG_ACTIVE = PANEL.surfacePressed;
-const TEXT_REST = PANEL.text;
-const TEXT_HOVER = PANEL.text;
+const BG_REST = "rgba(10, 18, 30, 0.9)";
+const BG_HOVER = VR_PANEL.surfaceHover;
+const BG_ACTIVE = VR_PANEL.surfacePressed;
+const TEXT_REST = VR_PANEL.text;
+const TEXT_HOVER = VR_PANEL.text;
 
-const BG_RESET = "rgba(235, 230, 218, 0.92)";
-const BG_RESET_HOVER = PANEL.surfaceHover;
+const BG_RESET = "rgba(18, 54, 72, 0.94)";
+const BG_RESET_HOVER = "rgba(24, 72, 94, 0.98)";
 
 export function onMenuButton(cb: (id: string) => void): void {
   onButtonCallback = cb;
@@ -100,11 +100,11 @@ export function createFloatingMenu(scene: Scene, modelInfo?: ModelInfo): void {
     bg.height = 1;
     bg.cornerRadius = 64;
     bg.thickness = isReset ? 2 : 1;
-    bg.color = isReset ? PANEL.borderHover : PANEL.border;
+    bg.color = isReset ? VR_PANEL.borderHover : VR_PANEL.border;
     bg.background = isReset ? BG_RESET : BG_REST;
-    bg.shadowColor = "rgba(0, 0, 0, 0.18)";
-    bg.shadowBlur = isReset ? 14 : 10;
-    bg.shadowOffsetY = 2;
+    bg.shadowColor = "rgba(0, 0, 0, 0.36)";
+    bg.shadowBlur = isReset ? 18 : 14;
+    bg.shadowOffsetY = 4;
     guiTexture.addControl(bg);
 
     const text = new TextBlock(`text_${def.id}`, def.label);

@@ -12,7 +12,16 @@ import {
   Control,
 } from "@babylonjs/gui";
 import { getXR, onXRInput } from "../interactions/xrSetup";
-import { PANEL, styleBody, styleFooter, stylePanel, styleTitle } from "./panelTheme";
+import {
+  styleBody,
+  styleFooter,
+  stylePanel,
+  styleTitle,
+  styleVRBody,
+  styleVRFooter,
+  styleVRPanel,
+  styleVRTitle,
+} from "./panelTheme";
 
 /**
  * Minimal tutorial overlay — clean, typographic, Apple-like.
@@ -51,15 +60,15 @@ export function showTutorial(
     if (isVR) {
       tutorialMesh = MeshBuilder.CreatePlane(
         "tutorialPlane",
-        { width: 1.48, height: 0.72 },
+        { width: 1.72, height: 0.9 },
         scene
       );
       tutorialMesh.isPickable = false;
-      attachToViewer(tutorialMesh, -1.65, -0.02);
+      attachToViewer(tutorialMesh, -1.5, -0.01);
       tutorialTexture = AdvancedDynamicTexture.CreateForMesh(
         tutorialMesh,
-        1040,
-        504
+        1240,
+        648
       );
     } else {
       tutorialTexture = AdvancedDynamicTexture.CreateFullscreenUI(
@@ -74,16 +83,20 @@ export function showTutorial(
     const bg = new Rectangle("tutBg");
     bg.width = isVR ? 1 : "292px";
     bg.height = isVR ? 1 : "172px";
-    stylePanel(bg, isVR ? 15 : 12, isVR ? 14 : 16);
+    if (isVR) {
+      styleVRPanel(bg, 18, 18);
+    } else {
+      stylePanel(bg, 12, 16);
+    }
     bg.verticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
     tutorialTexture.addControl(bg);
 
     // ── Content ──────────────────────────────────────────
     const stack = new StackPanel("tutStack");
     stack.isVertical = true;
-    stack.paddingTopInPixels = isVR ? 28 : 22;
-    stack.paddingLeftInPixels = isVR ? 34 : 28;
-    stack.paddingRightInPixels = isVR ? 34 : 28;
+    stack.paddingTopInPixels = isVR ? 34 : 22;
+    stack.paddingLeftInPixels = isVR ? 42 : 28;
+    stack.paddingRightInPixels = isVR ? 42 : 28;
     bg.addControl(stack);
 
     // ── Instruction rows — clean two-line format ─────────
@@ -105,14 +118,22 @@ export function showTutorial(
       const instr = instructions[i];
 
       const action = new TextBlock(`action_${i}`, instr.action);
-      styleTitle(action, isVR ? 22 : 16);
-      action.height = isVR ? "30px" : "22px";
+      if (isVR) {
+        styleVRTitle(action, 26);
+      } else {
+        styleTitle(action, 16);
+      }
+      action.height = isVR ? "34px" : "22px";
       action.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
       stack.addControl(action);
 
       const hint = new TextBlock(`hint_${i}`, instr.hint);
-      styleBody(hint, isVR ? 15 : 12);
-      hint.height = isVR ? "22px" : "18px";
+      if (isVR) {
+        styleVRBody(hint, 18);
+      } else {
+        styleBody(hint, 12);
+      }
+      hint.height = isVR ? "26px" : "18px";
       hint.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
       stack.addControl(hint);
 
@@ -130,9 +151,13 @@ export function showTutorial(
       "tutDismiss",
       "press any button"
     );
-    styleFooter(dismiss, isVR ? 14 : 10);
-    dismiss.paddingTopInPixels = isVR ? 18 : 12;
-    dismiss.height = isVR ? "30px" : "22px";
+    if (isVR) {
+      styleVRFooter(dismiss, 16);
+    } else {
+      styleFooter(dismiss, 10);
+    }
+    dismiss.paddingTopInPixels = isVR ? 24 : 12;
+    dismiss.height = isVR ? "34px" : "22px";
     dismiss.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
     stack.addControl(dismiss);
 
