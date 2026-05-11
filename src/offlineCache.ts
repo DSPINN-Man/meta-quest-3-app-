@@ -10,6 +10,11 @@ export function initOfflineCache(): void {
     return;
   }
 
+  if (!navigator.onLine) {
+    updateOfflineBadge("Offline demo running", "ready");
+    return;
+  }
+
   updateOfflineBadge("Preparing offline demo...", "working");
 
   window.addEventListener("load", () => {
