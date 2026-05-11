@@ -1,4 +1,5 @@
 import { Engine, Scene, ArcRotateCamera, Vector3 } from "@babylonjs/core";
+import { initOfflineCache } from "./offlineCache";
 import { createEnvironment } from "./scene/environment";
 import {
   createLighting,
@@ -100,6 +101,8 @@ import {
 import { HOTSPOTS } from "./utils/config";
 
 async function main() {
+  initOfflineCache();
+
   const canvas = document.getElementById("renderCanvas") as HTMLCanvasElement;
   if (!canvas) throw new Error("Canvas element #renderCanvas not found.");
 
@@ -138,6 +141,7 @@ async function main() {
   const loadingBar = document.getElementById("loadingBarFill");
   let modelInfo: ModelInfo | null = null;
   let inspectActive = false;
+  let vrFlowRunId = 0;
 
   try {
     modelInfo = await loadModel(scene, shadowGen, (pct) => {
@@ -448,11 +452,7 @@ async function main() {
   }
 
   onOnboardingCompleted.add((inVR) => {
-    if (inVR) {
-      startScriptedDemo();
-    } else {
-      stopScriptedDemo();
-    }
+    stopScriptedDemo();
   });
 
   // ── Guided tutorial state ──────────────────────────────
@@ -570,14 +570,24 @@ async function main() {
       reparentGuidedPromptToXR();
       // Panic-reset is the one UI element that's visible the whole VR
       // session — never hidden by the choice screen, tutorial, or menu.
-      showPanicReset();
+      hidePanicReset();
       showSpectatorOverlay();
-      setSpectatorStatus("Choosing experience", "Mode + background picker");
+      hideMenu();
+      hideGuidedPrompt();
+      closeInfoPanel();
+      hideHotspots();
+      hideHotspotCounter();
+      clearFinalCardTimer();
+      tutorialStep = -1;
+      inspectActive = false;
+      const flowId = ++vrFlowRunId;
+      setSpectatorStatus("Starting", "Preparing VR experience");
       // Run the mode/skybox picker BEFORE the menu/tutorial appear.
       // The menu and tutorial both reveal after the user picks.
-      void runVRChoiceFlow();
+      void startDirectVRFlow(flowId);
       console.log("VR entered — choice screen shown.");
     } else {
+      vrFlowRunId += 1;
       stopScriptedDemo();
       hideHotspots();
       hideHotspotCounter();
@@ -596,8 +606,23 @@ async function main() {
    *   quick → runQuickTour (skips the button-driven tutorial entirely)
    *   full  → reveal menu and start the tutorialSteps walkthrough
    */
-  async function runVRChoiceFlow(): Promise<void> {
+  async function startDirectVRFlow(flowId: number): Promise<void> {
     try {
+      doReset();
+      applySkybox("plant_room");
+      await runOnboarding();
+
+      if (!isInVR() || flowId !== vrFlowRunId) {
+        return;
+      }
+
+      showPanicReset();
+      showMenu();
+      setSpectatorStatus("Tutorial", "Learning the controls");
+      tutorialStep = 0;
+      showTutorialStep();
+      return;
+
       const choices = await showVRChoiceScreen(scene);
       console.log(
         `VR choice: mode=${choices.mode}, skybox=${choices.skyboxId}`
