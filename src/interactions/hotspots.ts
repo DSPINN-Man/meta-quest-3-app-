@@ -30,6 +30,8 @@ interface HotspotMarker {
   halo: Mesh;
   /** Dark disc behind the sphere so cyan reads against bright skyboxes */
   backing: Mesh;
+  /** Invisible oversized hit target for Quest controller rays */
+  hitTarget: Mesh;
   stem: Mesh;
   /** The mesh this hotspot is anchored to */
   targetMesh: AbstractMesh;
@@ -136,6 +138,22 @@ export function createHotspots(scene: Scene, modelInfo?: ModelInfo): void {
     sphere.receiveShadows = false;
     sphere.isPickable = true;
 
+    const hitTarget = MeshBuilder.CreateSphere(
+      `hotspot_hit_${hotspot.id}`,
+      { diameter: sphereRadius * 6, segments: 12 },
+      scene
+    );
+    hitTarget.position = pos.clone();
+    const hitMat = new StandardMaterial(`hotspotHitMat_${hotspot.id}`, scene);
+    hitMat.alpha = 0.01;
+    hitMat.disableLighting = true;
+    hitMat.diffuseColor = Color3.Black();
+    hitMat.emissiveColor = Color3.Black();
+    hitTarget.material = hitMat;
+    hitTarget.visibility = 0.01;
+    hitTarget.isPickable = true;
+    hitTarget.receiveShadows = false;
+
     // ── Dark backing disc — kills bright skybox bleed-through ──
     // A flat near-black disc placed BEHIND the sphere (slight offset)
     // so the cyan sphere doesn't get washed out against the
@@ -154,7 +172,7 @@ export function createHotspots(scene: Scene, modelInfo?: ModelInfo): void {
     backingMat.alpha = 0.78;
     backingMat.disableLighting = true;
     backing.material = backingMat;
-    backing.isPickable = false;
+    backing.isPickable = true;
     backing.receiveShadows = false;
     backing.renderingGroupId = 0;
 
@@ -178,7 +196,7 @@ export function createHotspots(scene: Scene, modelInfo?: ModelInfo): void {
     ringMat.alpha = 0.85;
     ringMat.disableLighting = true;
     ring.material = ringMat;
-    ring.isPickable = false;
+    ring.isPickable = true;
     ring.receiveShadows = false;
 
     // ── Outer halo ring — soft 4× wide glow that pulls the eye ─
@@ -200,21 +218,22 @@ export function createHotspots(scene: Scene, modelInfo?: ModelInfo): void {
     haloMat.alpha = 0.22;
     haloMat.disableLighting = true;
     halo.material = haloMat;
-    halo.isPickable = false;
+    halo.isPickable = true;
     halo.receiveShadows = false;
 
     // ── Pulsing animation ─────────────────────────────────────
     createPulseAnimation(sphere, scene);
 
     // ── Click interaction ─────────────────────────────────────
-    sphere.actionManager = new ActionManager(scene);
-    sphere.actionManager.registerAction(
-      new ExecuteCodeAction(ActionManager.OnPickTrigger, () => {
-        if (onActivateCallback) {
-          onActivateCallback(hotspot, sphere.absolutePosition.clone());
-        }
-      })
-    );
+    const activate = () => {
+      onActivateCallback?.(hotspot, sphere.absolutePosition.clone());
+    };
+    for (const pickMesh of [sphere, hitTarget, backing, ring, halo]) {
+      pickMesh.actionManager = new ActionManager(scene);
+      pickMesh.actionManager.registerAction(
+        new ExecuteCodeAction(ActionManager.OnPickTrigger, activate)
+      );
+    }
 
     // ── Thin vertical stem below the sphere ───────────────────
     const stem = MeshBuilder.CreateCylinder(
@@ -237,6 +256,7 @@ export function createHotspots(scene: Scene, modelInfo?: ModelInfo): void {
       ring,
       halo,
       backing,
+      hitTarget,
       stem,
       targetMesh,
       yOffset: yOffset + boost,
@@ -245,6 +265,7 @@ export function createHotspots(scene: Scene, modelInfo?: ModelInfo): void {
 
     // Start HIDDEN
     sphere.setEnabled(false);
+    hitTarget.setEnabled(false);
     ring.setEnabled(false);
     halo.setEnabled(false);
     backing.setEnabled(false);
@@ -287,6 +308,10 @@ export function createHotspots(scene: Scene, modelInfo?: ModelInfo): void {
       m.backing.position.x = center.x;
       m.backing.position.y = py;
       m.backing.position.z = center.z;
+
+      m.hitTarget.position.x = center.x;
+      m.hitTarget.position.y = py;
+      m.hitTarget.position.z = center.z;
 
       // Stem below sphere
       const sphereRadius = m.sphere.getBoundingInfo().boundingBox.extendSizeWorld.y;
@@ -349,6 +374,7 @@ function createPulseAnimation(sphere: Mesh, scene: Scene): void {
 export function showHotspots(): void {
   for (const m of markers) {
     m.backing.setEnabled(true);
+    m.hitTarget.setEnabled(true);
     m.sphere.setEnabled(true);
     m.ring.setEnabled(true);
     m.halo.setEnabled(true);
@@ -361,6 +387,7 @@ export function showHotspots(): void {
 export function hideHotspots(): void {
   for (const m of markers) {
     m.backing.setEnabled(false);
+    m.hitTarget.setEnabled(false);
     m.sphere.setEnabled(false);
     m.ring.setEnabled(false);
     m.halo.setEnabled(false);

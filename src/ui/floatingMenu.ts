@@ -51,9 +51,9 @@ export function createFloatingMenu(scene: Scene, modelInfo?: ModelInfo): void {
   const modelCenter = modelInfo?.center ?? new Vector3(0, 1.25, 0);
 
   const menuPos = new Vector3(
-    modelCenter.x + modelWidth * 0.5 + 0.8,
-    1.4,
-    modelCenter.z
+    modelCenter.x + modelWidth * 0.5 + 0.55,
+    1.48,
+    modelCenter.z - 0.7
   );
 
   const buttonDefs = [
@@ -61,19 +61,17 @@ export function createFloatingMenu(scene: Scene, modelInfo?: ModelInfo): void {
     { label: "B  Back", id: "move_back" },
     { label: "X  Interior", id: "toggle_interior" },
     { label: "Y  Explode", id: "toggle_explode" },
-    { label: "Background", id: "settings" },
-    { label: "Quick Tour", id: "quick_tour" },
+    { label: "Backgrounds", id: "settings" },
     { label: "Reset View", id: "reset" },
   ];
 
-  const btnWidth = Math.max(0.45, modelHeight * 0.2);
-  const btnHeight = Math.max(0.1, modelHeight * 0.05);
+  const btnWidth = Math.max(0.72, modelHeight * 0.28);
+  const btnHeight = Math.max(0.15, modelHeight * 0.065);
   const gap = btnHeight * 0.25;
 
   for (let i = 0; i < buttonDefs.length; i++) {
     const def = buttonDefs[i];
-    const isReset =
-      def.id === "reset" || def.id === "quick_tour" || def.id === "settings";
+    const isReset = def.id === "reset" || def.id === "settings";
     const yOffset = (buttonDefs.length / 2 - i - 0.5) * (btnHeight + gap);
 
     const plane = MeshBuilder.CreatePlane(
@@ -109,7 +107,7 @@ export function createFloatingMenu(scene: Scene, modelInfo?: ModelInfo): void {
 
     const text = new TextBlock(`text_${def.id}`, def.label);
     text.color = TEXT_REST;
-    text.fontSize = 34;
+    text.fontSize = 38;
     text.fontWeight = isReset ? "600" : "500";
     text.fontFamily = "system-ui, -apple-system, 'SF Pro Display', sans-serif";
     text.verticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;

@@ -86,19 +86,13 @@ import {
   showContactShadow,
   hideContactShadow,
 } from "./scene/contactShadow";
-import { runQuickTour, isQuickTourActive, skipQuickTourAct } from "./flow/quickTour";
+import { showSkyboxPickerOnly } from "./ui/vrChoiceScreen";
 import {
   showSpectatorOverlay,
   hideSpectatorOverlay,
   setSpectatorStatus,
 } from "./ui/spectatorOverlay";
-import {
-  createHotspotCounter,
-  setHotspotCount,
-  showHotspotCounter,
-  hideHotspotCounter,
-} from "./ui/hotspotCounter";
-import { HOTSPOTS, SKYBOX_OPTIONS } from "./utils/config";
+import { SKYBOX_OPTIONS } from "./utils/config";
 
 async function main() {
   initOfflineCache();
@@ -199,7 +193,7 @@ async function main() {
   createContactShadow(scene, modelInfo ?? undefined);
   let currentSkyboxIndex = Math.max(
     0,
-    SKYBOX_OPTIONS.findIndex((option) => option.id === "plant_room")
+    SKYBOX_OPTIONS.findIndex((option) => option.id === "enspec_theme")
   );
 
   /**
@@ -220,14 +214,19 @@ async function main() {
     }
   }
 
-  function cycleSkybox(): void {
-    currentSkyboxIndex = (currentSkyboxIndex + 1) % SKYBOX_OPTIONS.length;
-    const next = SKYBOX_OPTIONS[currentSkyboxIndex];
-    applySkybox(next.id);
-    if (isInVR()) {
-      setSpectatorStatus("Background", next.label);
+  async function chooseSkybox(): Promise<void> {
+    hideMenu();
+    setSpectatorStatus("Backgrounds", "Choosing environment");
+    const selected = await showSkyboxPickerOnly(scene);
+    if (selected) {
+      applySkybox(selected);
+      const label =
+        SKYBOX_OPTIONS.find((option) => option.id === selected)?.label ??
+        selected;
+      setSpectatorStatus("Background", label);
+      console.log(`Background selected: ${selected} (${label})`);
     }
-    console.log(`Background cycled to ${next.id} (${next.label})`);
+    showMenu();
   }
   onHotspotActivated((data, worldPos) => {
     // Always teleport to the clicked hotspot — user should be able to click
@@ -255,7 +254,6 @@ async function main() {
       await openAllDoors(scene);
     }
     showHotspots();
-    showHotspotCounter();
     enableInteriorLight();
   }
 
@@ -268,7 +266,6 @@ async function main() {
         await unfadeExterior(scene);
       }
       hideHotspots();
-      hideHotspotCounter();
       closeInfoPanel();
       disableInteriorLight();
       await closeAllDoors(scene);
@@ -290,7 +287,6 @@ async function main() {
       await collapse(scene);
       await unfadeExterior(scene);
       hideHotspots();
-      hideHotspotCounter();
       disableInteriorLight();
       await closeAllDoors(scene);
       if (isInVR()) setSpectatorStatus("Free Exploration", "Components reassembled");
@@ -303,7 +299,6 @@ async function main() {
     await fadeExterior(scene);
     enableInteriorLight();
     showHotspots();
-    showHotspotCounter();
     await toggleExplodedView(scene);
     if (isInVR()) setSpectatorStatus("Exploded View", "Subsystems separated for inspection");
   }
@@ -314,7 +309,6 @@ async function main() {
     resetDoors();
     resetGuidedView();
     hideHotspots();
-    hideHotspotCounter();
     resetHotspotProgress();
     closeInfoPanel();
     disableInteriorLight();
@@ -349,15 +343,6 @@ async function main() {
   async function handleXRAction(action: XRButtonAction) {
     console.log(`handleXRAction: ${action}`);
 
-    // While the Quick Tour is running, the right grip should *skip the
-    // current act*, not full-reset. Reset behaviour returns once the
-    // tour completes (or the user exits / panic-resets via the menu).
-    if (action === "reset_view" && isQuickTourActive()) {
-      console.log("Quick Tour active — grip skips to next act");
-      skipQuickTourAct();
-      return;
-    }
-
     // B button while inspecting a hotspot: close the card and step back
     if (inspectActive && action === "move_back") {
       inspectActive = false;
@@ -371,33 +356,18 @@ async function main() {
 
   createFloatingMenu(scene, modelInfo ?? undefined);
   createPanicReset(scene, modelInfo ?? undefined);
-  createHotspotCounter(scene, modelInfo ?? undefined);
   onPanicReset(() => {
     void handleXRAction("reset_view");
   });
 
   // ── Hotspot inspection tracking ─────────────────────────
-  // Track which subsystem hotspots the visitor has clicked at least
-  // once. The counter shows progress; once they've seen 4 of 5 we give
-  // the remaining one an extra attention pulse.
   const inspectedHotspots = new Set<string>();
-  const totalHotspots = HOTSPOTS.length;
   function markHotspotInspected(id: string): void {
     if (inspectedHotspots.has(id)) return;
     inspectedHotspots.add(id);
-    setHotspotCount(inspectedHotspots.size, totalHotspots);
-    const remaining = totalHotspots - inspectedHotspots.size;
-    if (remaining > 0 && remaining <= 1) {
-      // One left — pulse it so the visitor sees there's more to find.
-      const remainingIds = HOTSPOTS
-        .map((h) => h.id)
-        .filter((id) => !inspectedHotspots.has(id));
-      pulseHotspotsOnce(remainingIds);
-    }
   }
   function resetHotspotProgress(): void {
     inspectedHotspots.clear();
-    setHotspotCount(0, totalHotspots);
   }
   onMenuButton((id) => {
     switch (id) {
@@ -416,21 +386,8 @@ async function main() {
       case "reset":
         void handleXRAction("reset_view");
         break;
-      case "quick_tour":
-        void (async () => {
-          doReset();
-          hideGuidedPrompt();
-          tutorialStep = -1;
-          await runQuickTour(scene, {
-            moveCloser: () => stepGuidedView(1),
-            revealInterior: () => doToggleInterior(),
-            explode: () => doToggleExploded(),
-            reset: () => doReset(),
-          });
-        })();
-        break;
       case "settings":
-        cycleSkybox();
+        void chooseSkybox();
         break;
     }
   });
@@ -581,7 +538,6 @@ async function main() {
       hideGuidedPrompt();
       closeInfoPanel();
       hideHotspots();
-      hideHotspotCounter();
       clearFinalCardTimer();
       tutorialStep = -1;
       inspectActive = false;
@@ -593,7 +549,6 @@ async function main() {
       vrFlowRunId += 1;
       stopScriptedDemo();
       hideHotspots();
-      hideHotspotCounter();
       closeInfoPanel();
       hideGuidedPrompt();
       hidePanicReset();
@@ -617,7 +572,7 @@ async function main() {
       }
 
       doReset();
-      applySkybox("plant_room");
+      applySkybox("enspec_theme");
       setSpectatorStatus("Onboarding", "Showing ENSPEC intro");
       await runOnboarding();
 

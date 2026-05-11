@@ -162,11 +162,17 @@ async function runOnboardingInternal(): Promise<void> {
     camera.autoRotationBehavior.idleRotationSpeed = 0;
   }
 
-  // Start kiosk idle watcher
-  startKioskWatch(() => {
-    handleKioskReset();
-  });
-  rearmKiosk();
+  if (vr) {
+    // In Quest, headset movement and controller rays are not reliable DOM
+    // activity signals. Auto-resetting while a visitor is actively looking
+    // around feels broken, so VR reset is now manual via the Reset button.
+    pauseKiosk();
+  } else {
+    startKioskWatch(() => {
+      handleKioskReset();
+    });
+    rearmKiosk();
+  }
 }
 
 /**

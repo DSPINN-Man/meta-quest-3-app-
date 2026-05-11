@@ -124,6 +124,14 @@ export const HOTSPOTS: HotspotData[] = [
       "This DIN rail decides who gets power and who doesn't. Protection relays detect faults in microseconds and trip circuits before damage occurs. PLC I/O modules link to NGET's SCADA system for remote monitoring from the National Grid control room. Every connected load is individually measured and protected.",
   },
   {
+    id: "enclosure",
+    meshName: "door_panel_center",
+    title: "Service Enclosure",
+    description:
+      "The enclosure protects the live assemblies and gives engineers controlled access during inspection. Door sections and internal barriers separate operator-facing controls from the high-energy switching and cable areas.",
+    yBoost: 0.45,
+  },
+  {
     // The original cable_box_main mesh was fused into frame_structure during the
     // Blender rebuild. We anchor this hotspot to frame_structure with a high
     // yBoost so it floats clearly above the cabinet rather than disappearing.
@@ -218,6 +226,13 @@ export interface SkyboxOption {
 // central floor/pad so the imported switchgear model reads as physically placed
 // in the location instead of floating over a generic backdrop.
 export const SKYBOX_OPTIONS: SkyboxOption[] = [
+  {
+    id: "enspec_theme",
+    label: "ENSPEC Light Blue",
+    file: null,
+    fallbackColor: ENV.clearColor.clone(),
+    groundColor: ENV.groundColor.clone(),
+  },
   {
     id: "plant_room",
     label: "Premium Plant Room",
