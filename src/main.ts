@@ -87,7 +87,9 @@ import {
   hideContactShadow,
 } from "./scene/contactShadow";
 import {
+  closeSkyboxPicker,
   handleSkyboxPickerAction,
+  isSkyboxPickerOpen,
   showSkyboxPickerOnly,
 } from "./ui/vrChoiceScreen";
 import {
@@ -218,18 +220,26 @@ async function main() {
   }
 
   async function chooseSkybox(): Promise<void> {
-    hideMenu();
-    setSpectatorStatus("Backgrounds", "Choosing environment");
-    const selected = await showSkyboxPickerOnly(scene);
-    if (selected) {
-      applySkybox(selected);
-      const label =
-        SKYBOX_OPTIONS.find((option) => option.id === selected)?.label ??
-        selected;
-      setSpectatorStatus("Background", label);
-      console.log(`Background selected: ${selected} (${label})`);
+    if (isSkyboxPickerOpen()) {
+      closeSkyboxPicker();
+      setSpectatorStatus("Backgrounds", "Closed");
+      return;
     }
-    showMenu();
+
+    setSpectatorStatus("Backgrounds", "Choosing environment");
+    try {
+      const selected = await showSkyboxPickerOnly(scene, modelInfo ?? undefined);
+      if (selected) {
+        applySkybox(selected);
+        const label =
+          SKYBOX_OPTIONS.find((option) => option.id === selected)?.label ??
+          selected;
+        setSpectatorStatus("Background", label);
+        console.log(`Background selected: ${selected} (${label})`);
+      }
+    } finally {
+      showMenu();
+    }
   }
   onHotspotActivated((data, worldPos) => {
     // Always teleport to the clicked hotspot — user should be able to click

@@ -4,6 +4,7 @@ import {
   Mesh,
   MeshBuilder,
   Scene,
+  Vector3,
 } from "@babylonjs/core";
 import {
   AdvancedDynamicTexture,
@@ -11,7 +12,8 @@ import {
   Rectangle,
   TextBlock,
 } from "@babylonjs/gui";
-import { getXR, type XRButtonAction } from "../interactions/xrSetup";
+import type { XRButtonAction } from "../interactions/xrSetup";
+import type { ModelInfo } from "../scene/modelLoader";
 import { SKYBOX_OPTIONS } from "../utils/config";
 import {
   VR_PANEL,
@@ -54,14 +56,29 @@ export function showVRChoiceScreen(scene: Scene): Promise<VRChoices> {
   });
 }
 
-export function showSkyboxPickerOnly(scene: Scene): Promise<SkyboxPick> {
-  disposeActive();
+export function showSkyboxPickerOnly(
+  scene: Scene,
+  modelInfo?: ModelInfo
+): Promise<SkyboxPick> {
+  if (activePickerResolve) {
+    resolvePicker(null);
+  } else {
+    disposeActive();
+  }
 
   return new Promise((resolve) => {
     activePickerResolve = resolve;
     activeActionMap = new Map();
-    showSkyboxPicker(scene);
+    showSkyboxPicker(scene, modelInfo);
   });
+}
+
+export function isSkyboxPickerOpen(): boolean {
+  return activePickerResolve !== null;
+}
+
+export function closeSkyboxPicker(): void {
+  resolvePicker(null);
 }
 
 export function handleSkyboxPickerAction(action: XRButtonAction): boolean {
@@ -77,9 +94,10 @@ export function handleSkyboxPickerAction(action: XRButtonAction): boolean {
   return true;
 }
 
-function showSkyboxPicker(scene: Scene): void {
+function showSkyboxPicker(scene: Scene, modelInfo?: ModelInfo): void {
   const options = SKYBOX_OPTIONS.slice(0, ACTION_ORDER.length);
-  const panel = createPlane(scene, "choiceSkyboxPanel", 1.98, 1.12, 0, 0, -1.2);
+  const anchor = getPickerAnchor(modelInfo);
+  const panel = createPlane(scene, "choiceSkyboxPanel", 2.1, 1.14, anchor, 0, 0, 0);
   panel.isPickable = false;
   const panelTex = AdvancedDynamicTexture.CreateForMesh(panel, 1320, 748);
   const panelBg = new Rectangle("choiceSkyboxBg");
@@ -89,9 +107,21 @@ function showSkyboxPicker(scene: Scene): void {
   panelTex.addControl(panelBg);
   activeMeshes.push(panel);
 
-  const title = createTextPlane(scene, "choiceSkyboxTitle", 1.74, 0.14, 0, 0.42, -1.19);
+  const title = createTextPlane(
+    scene,
+    "choiceSkyboxTitle",
+    1.78,
+    0.14,
+    anchor,
+    0,
+    0.43,
+    -0.04
+  );
   const titleTex = AdvancedDynamicTexture.CreateForMesh(title, 1100, 120);
-  const titleText = new TextBlock("choiceSkyboxTitleText", "Choose background");
+  const titleText = new TextBlock(
+    "choiceSkyboxTitleText",
+    "Choose background"
+  );
   styleVRTitle(titleText, 34);
   titleText.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
   titleTex.addControl(titleText);
@@ -109,6 +139,7 @@ function showSkyboxPicker(scene: Scene): void {
       `skyboxButton_${option.id}`,
       `${label}  ${option.label}`,
       option.file ? "environment scene" : "ENSPEC theme",
+      anchor,
       y,
       () => resolvePicker(option.id)
     );
@@ -119,6 +150,7 @@ function showSkyboxPicker(scene: Scene): void {
     "skyboxButton_close",
     "Grip  Close",
     "keep current background",
+    anchor,
     -0.52,
     () => resolvePicker(null)
   );
@@ -129,10 +161,11 @@ function createPickButton(
   name: string,
   label: string,
   subtitle: string,
+  anchor: Vector3,
   y: number,
   onPick: () => void
 ): void {
-  const mesh = createPlane(scene, name, 1.58, 0.13, 0, y, -1.18);
+  const mesh = createPlane(scene, name, 1.68, 0.13, anchor, 0, y, -0.06);
   mesh.isPickable = true;
   mesh.actionManager = new ActionManager(scene);
   mesh.actionManager.registerAction(
@@ -181,11 +214,12 @@ function createTextPlane(
   name: string,
   width: number,
   height: number,
+  anchor: Vector3,
   x: number,
   y: number,
   z: number
 ): Mesh {
-  const mesh = createPlane(scene, name, width, height, x, y, z);
+  const mesh = createPlane(scene, name, width, height, anchor, x, y, z);
   mesh.isPickable = false;
   return mesh;
 }
@@ -195,21 +229,31 @@ function createPlane(
   name: string,
   width: number,
   height: number,
+  anchor: Vector3,
   x: number,
   y: number,
   z: number
 ): Mesh {
   const mesh = MeshBuilder.CreatePlane(name, { width, height }, scene);
-  const xrCamera = getXR()?.baseExperience.camera;
-  if (xrCamera) {
-    mesh.parent = xrCamera;
-    mesh.position.set(x, y, z);
-    mesh.rotation.set(0, 0, 0);
-  } else {
-    mesh.position.set(x, 1.6 + y, z);
-    mesh.billboardMode = Mesh.BILLBOARDMODE_ALL;
-  }
+  mesh.position.set(anchor.x + x, anchor.y + y, anchor.z + z);
+  mesh.billboardMode = Mesh.BILLBOARDMODE_ALL;
+  mesh.receiveShadows = false;
   return mesh;
+}
+
+function getPickerAnchor(modelInfo?: ModelInfo): Vector3 {
+  if (!modelInfo) {
+    return new Vector3(0, 1.6, -1.8);
+  }
+
+  const modelSpan = Math.max(modelInfo.width, modelInfo.depth, 1);
+  const forwardOffset = Math.max(modelInfo.depth * 0.8, modelSpan * 0.35, 1.8);
+
+  return new Vector3(
+    modelInfo.center.x,
+    Math.max(1.45, Math.min(1.75, modelInfo.center.y + modelInfo.height * 0.2)),
+    modelInfo.center.z - forwardOffset
+  );
 }
 
 function resolvePicker(value: SkyboxPick): void {
