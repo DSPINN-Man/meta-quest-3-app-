@@ -4,16 +4,12 @@ import {
   WebXRState,
   WebXRInputSource,
   Mesh,
-  LinesMesh,
-  MeshBuilder,
-  StandardMaterial,
   Color3,
   Vector3,
-  Ray,
   Observable,
   Observer,
 } from "@babylonjs/core";
-import "@babylonjs/core/XR/motionController/webXROculusTouchMotionController";
+import { WebXROculusTouchMotionController } from "@babylonjs/core/XR/motionController/webXROculusTouchMotionController";
 import "@babylonjs/core/XR/motionController/webXRGenericMotionController";
 
 export type XRButtonAction =
@@ -36,20 +32,9 @@ type TrackedController = {
   source: WebXRInputSource;
   pressedButtons: Set<number>;
   hasMotionProfile: boolean;
-  visual?: ControllerVisual;
-};
-
-type ControllerVisual = {
-  body: Mesh;
-  tip: Mesh;
-  reticle: Mesh;
-  laser: LinesMesh;
-  ray: Ray;
-  points: Vector3[];
 };
 
 const trackedControllers = new Map<string, TrackedController>();
-const CONTROLLER_RAY_LENGTH = 2.6;
 
 export const onXRInput = new Observable<void>();
 export const onVRStateChanged = new Observable<boolean>();
@@ -234,11 +219,16 @@ export async function setupXR(
       return null;
     }
 
+    // Serve the real Quest controller meshes from this app instead of relying
+    // on the public Babylon controller CDN during the live booth demo.
+    WebXROculusTouchMotionController.QUEST_MODEL_BASE_URL =
+      "/controllers/oculusQuest/";
+
     const xr = await scene.createDefaultXRExperienceAsync({
       disableTeleportation: true,
       inputOptions: {
-        // Avoid depending on an online controller-model repository at a booth.
-        // Fallback controller visuals below still render if no model appears.
+        // Force Babylon to use the imported Oculus controller class, whose
+        // model path is set above to local public assets.
         disableOnlineControllerRepository: true,
         controllerOptions: {
           renderingGroupId: 2,
@@ -301,12 +291,10 @@ function setupTrackedControllers(
   scene: Scene
 ): void {
   input.onControllerAddedObservable.add((controller) => {
-    const visual = createControllerVisual(controller, scene);
     trackedControllers.set(controller.uniqueId, {
       source: controller,
       pressedButtons: new Set<number>(),
       hasMotionProfile: false,
-      visual,
     });
 
     controller.onMotionControllerInitObservable.add((motionController) => {
@@ -356,137 +344,16 @@ function setupTrackedControllers(
     });
 
     controller.onDisposeObservable.add(() => {
-      disposeControllerVisual(trackedControllers.get(controller.uniqueId)?.visual);
       trackedControllers.delete(controller.uniqueId);
     });
   });
 
   if (!pollObserver) {
     pollObserver = scene.onBeforeRenderObservable.add(() => {
-      updateControllerVisuals(scene);
       pollQuestButtons();
       pollJoystickAxes();
     });
   }
-}
-
-function createControllerVisual(
-  controller: WebXRInputSource,
-  scene: Scene
-): ControllerVisual {
-  const hand = controller.inputSource.handedness;
-  const color =
-    hand === "left"
-      ? new Color3(0.35, 0.76, 0.84)
-      : new Color3(0.31, 0.75, 0.69);
-
-  const material = new StandardMaterial(`xrController_${hand}_mat`, scene);
-  material.diffuseColor = color.scale(0.65);
-  material.emissiveColor = color;
-  material.specularColor = Color3.White();
-  material.disableLighting = true;
-
-  const body = MeshBuilder.CreateBox(
-    `xrController_${hand}_body`,
-    { width: 0.06, height: 0.08, depth: 0.16 },
-    scene
-  );
-  body.material = material;
-  body.isPickable = false;
-  body.renderingGroupId = 2;
-  body.alwaysSelectAsActiveMesh = true;
-
-  const tip = MeshBuilder.CreateSphere(
-    `xrController_${hand}_tip`,
-    { diameter: 0.045, segments: 12 },
-    scene
-  );
-  tip.material = material;
-  tip.isPickable = false;
-  tip.renderingGroupId = 2;
-  tip.alwaysSelectAsActiveMesh = true;
-
-  const anchor = controller.grip ?? controller.pointer;
-  body.parent = anchor;
-  tip.parent = anchor;
-  body.position.set(0, -0.015, 0.02);
-  tip.position.set(0, 0, -0.09);
-
-  const points = [Vector3.Zero(), new Vector3(0, 0, -CONTROLLER_RAY_LENGTH)];
-  const laser = MeshBuilder.CreateLines(
-    `xrController_${hand}_laser`,
-    { points, updatable: true },
-    scene
-  );
-  laser.color = color;
-  laser.alpha = 0.9;
-  laser.isPickable = false;
-  laser.renderingGroupId = 2;
-  laser.alwaysSelectAsActiveMesh = true;
-
-  const reticle = MeshBuilder.CreateSphere(
-    `xrController_${hand}_reticle`,
-    { diameter: 0.035, segments: 12 },
-    scene
-  );
-  reticle.material = material;
-  reticle.isPickable = false;
-  reticle.renderingGroupId = 2;
-  reticle.alwaysSelectAsActiveMesh = true;
-
-  const visual = {
-    body,
-    tip,
-    reticle,
-    laser,
-    ray: new Ray(Vector3.Zero(), Vector3.Forward(), CONTROLLER_RAY_LENGTH),
-    points,
-  };
-  setControllerVisualEnabled(visual, false);
-  return visual;
-}
-
-function updateControllerVisuals(scene: Scene): void {
-  for (const tracked of trackedControllers.values()) {
-    const visual = tracked.visual;
-    if (!visual) continue;
-
-    setControllerVisualEnabled(visual, vrActive);
-    if (!vrActive) continue;
-
-    tracked.source.getWorldPointerRayToRef(visual.ray, true);
-    visual.points[0].copyFrom(visual.ray.origin);
-    visual.points[1]
-      .copyFrom(visual.ray.direction)
-      .scaleInPlace(CONTROLLER_RAY_LENGTH)
-      .addInPlace(visual.ray.origin);
-
-    MeshBuilder.CreateLines(
-      visual.laser.name,
-      { points: visual.points, instance: visual.laser },
-      scene
-    );
-    visual.reticle.position.copyFrom(visual.points[1]);
-  }
-}
-
-function setControllerVisualEnabled(
-  visual: ControllerVisual,
-  enabled: boolean
-): void {
-  visual.body.setEnabled(enabled);
-  visual.tip.setEnabled(enabled);
-  visual.reticle.setEnabled(enabled);
-  visual.laser.setEnabled(enabled);
-}
-
-function disposeControllerVisual(visual?: ControllerVisual): void {
-  if (!visual) return;
-  visual.body.material?.dispose();
-  visual.body.dispose();
-  visual.tip.dispose();
-  visual.reticle.dispose();
-  visual.laser.dispose();
 }
 
 function pollQuestButtons(): void {
